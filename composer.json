@@ -11,6 +11,7 @@
         "php": "^8.2",
         "ext-exif": "*",
         "ext-gd": "*",
+        "codenix-sv/coingecko-api": "^1.0",
         "fakerphp/faker": "^1.23",
         "guzzlehttp/guzzle": "^7.2",
         "inertiajs/inertia-laravel": "^1.0",
@@ -66,7 +67,10 @@
     "config": {
         "optimize-autoloader": true,
         "preferred-install": "dist",
-        "sort-packages": true
+        "sort-packages": true,
+        "allow-plugins": {
+            "php-http/discovery": true
+        }
     },
     "minimum-stability": "dev",
     "prefer-stable": true

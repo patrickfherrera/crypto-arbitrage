@@ -4,7 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\CoinArbitrage;
 use App\Models\ProfitValue;
-//use App\Services\BinanceSpotAPI\Convert;
+use App\Services\BinanceSpotAPI\Convert;
 use GuzzleHttp\Exception\ClientException;
 use Illuminate\Console\Command;
 use Illuminate\Support\Arr;
@@ -33,7 +33,7 @@ class ArbitrageExperimental extends Command
     protected $rate_limit = 86400;
 
     private function convertCoin($coinConvertParams)
-    {dd('stop');
+    {
         $convertCoinSendQuoteResponse = (new Convert())->sendQuote($coinConvertParams);
 
         $this->count += 1;
