@@ -1,0 +1,30 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::table('usdt_values', function (Blueprint $table) {
+            $table->dropColumn('force_selling');
+            $table->dropColumn('coin_value');
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::table('usdt_values', function (Blueprint $table) {
+            $table->boolean('force_selling')->default(0)->after('updated_at');
+            $table->decimal('coin_value')->nullable()->after('force_selling');
+        });
+    }
+};
