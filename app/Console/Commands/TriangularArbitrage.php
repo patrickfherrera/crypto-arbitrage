@@ -38,7 +38,7 @@ class TriangularArbitrage extends Command
             $coinArbitrage->coin_two->symbol,
             $coinArbitrage->coin_three->symbol,
         ]);
-dd($prices);
+
         if (!$prices) {
             $this->error("Failed to fetch Binance prices.");
             return;
