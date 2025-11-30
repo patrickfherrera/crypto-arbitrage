@@ -2,7 +2,6 @@
   <Head title="Login" />
   <div class="flex items-center justify-center p-6 min-h-screen bg-indigo-800">
     <div class="w-full max-w-md">
-      <logo class="block mx-auto w-full max-w-xs fill-white" height="50" />
       <form class="mt-8 bg-white rounded-lg shadow-xl overflow-hidden" @submit.prevent="login">
         <div class="px-10 py-12">
           <h1 class="text-center text-3xl font-bold">Welcome Back!</h1>
@@ -38,8 +37,8 @@ export default {
   data() {
     return {
       form: this.$inertia.form({
-        email: 'johndoe@example.com',
-        password: 'secret',
+        email: '',
+        password: '',
         remember: false,
       }),
     }
