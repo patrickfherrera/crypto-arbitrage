@@ -4,7 +4,7 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\ContactsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ImagesController;
-use App\Http\Controllers\OrganizationsController;
+use App\Http\Controllers\CoinsController;
 use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\UsersController;
 use Illuminate\Support\Facades\Route;
@@ -69,34 +69,34 @@ Route::put('users/{user}/restore', [UsersController::class, 'restore'])
     ->name('users.restore')
     ->middleware('auth');
 
-// Organizations
+// Coins
 
-Route::get('organizations', [OrganizationsController::class, 'index'])
-    ->name('organizations')
+Route::get('coins', [CoinsController::class, 'index'])
+    ->name('coins')
     ->middleware('auth');
 
-Route::get('organizations/create', [OrganizationsController::class, 'create'])
-    ->name('organizations.create')
+Route::get('coins/create', [CoinsController::class, 'create'])
+    ->name('coins.create')
     ->middleware('auth');
 
-Route::post('organizations', [OrganizationsController::class, 'store'])
-    ->name('organizations.store')
+Route::post('coins', [CoinsController::class, 'store'])
+    ->name('coins.store')
     ->middleware('auth');
 
-Route::get('organizations/{organization}/edit', [OrganizationsController::class, 'edit'])
-    ->name('organizations.edit')
+Route::get('coins/{coin}/edit', [CoinsController::class, 'edit'])
+    ->name('coins.edit')
     ->middleware('auth');
 
-Route::put('organizations/{organization}', [OrganizationsController::class, 'update'])
-    ->name('organizations.update')
+Route::put('coins/{coin}', [CoinsController::class, 'update'])
+    ->name('coins.update')
     ->middleware('auth');
 
-Route::delete('organizations/{organization}', [OrganizationsController::class, 'destroy'])
-    ->name('organizations.destroy')
+Route::delete('coins/{coin}', [CoinsController::class, 'destroy'])
+    ->name('coins.destroy')
     ->middleware('auth');
 
-Route::put('organizations/{organization}/restore', [OrganizationsController::class, 'restore'])
-    ->name('organizations.restore')
+Route::put('coins/{coin}/restore', [CoinsController::class, 'restore'])
+    ->name('coins.restore')
     ->middleware('auth');
 
 // Contacts
