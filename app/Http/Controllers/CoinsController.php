@@ -17,13 +17,12 @@ class CoinsController extends Controller
     {
         return Inertia::render('Coins/Index', [
             'filters' => Request::all('search', 'trashed'),
-            'coins' => Coin::orderBy('name')
+            'coins' => Coin::orderBy('symbol')
                 ->filter(Request::only('search', 'trashed'))
                 ->paginate(10)
                 ->withQueryString()
                 ->through(fn ($coin) => [
                     'id' => $coin->id,
-                    'name' => $coin->name,
                     'symbol' => $coin->symbol,
                     'base_asset' => $coin->base_asset,
                     'quote_asset' => $coin->quote_asset,
@@ -34,75 +33,62 @@ class CoinsController extends Controller
 
     public function create(): Response
     {
-        return Inertia::render('Organizations/Create');
+        return Inertia::render('Coins/Create');
     }
 
     public function store(): RedirectResponse
     {
-        Auth::user()->account->organizations()->create(
+        Coin::create(
             Request::validate([
-                'name' => ['required', 'max:100'],
-                'email' => ['nullable', 'max:50', 'email'],
-                'phone' => ['nullable', 'max:50'],
-                'address' => ['nullable', 'max:150'],
-                'city' => ['nullable', 'max:50'],
-                'region' => ['nullable', 'max:50'],
-                'country' => ['nullable', 'max:2'],
-                'postal_code' => ['nullable', 'max:25'],
+                'base_asset' => ['required'],
+                'quote_asset' => ['required'],
+                'transfer_fee' => ['required', 'numeric'],
+                'enabled' => ['boolean']
             ])
         );
 
-        return Redirect::route('organizations')->with('success', 'Organization created.');
+        return Redirect::route('coins')->with('success', 'Coin created.');
     }
 
-    public function edit(Organization $organization): Response
+    public function edit(Coin $coin): Response
     {
-        return Inertia::render('Organizations/Edit', [
-            'organization' => [
-                'id' => $organization->id,
-                'name' => $organization->name,
-                'email' => $organization->email,
-                'phone' => $organization->phone,
-                'address' => $organization->address,
-                'city' => $organization->city,
-                'region' => $organization->region,
-                'country' => $organization->country,
-                'postal_code' => $organization->postal_code,
-                'deleted_at' => $organization->deleted_at,
-                'contacts' => $organization->contacts()->orderByName()->get()->map->only('id', 'name', 'city', 'phone'),
+        return Inertia::render('Coins/Edit', [
+            'coin' => [
+                'id' => $coin->id,
+                'base_asset' => $coin->base_asset,
+                'quote_asset' => $coin->quote_asset,
+                'transfer_fee' => $coin->transfer_fee,
+                'enabled' => $coin->enabled,
+                'deleted_at' => $coin->deleted_at
             ],
         ]);
     }
 
-    public function update(Organization $organization): RedirectResponse
+    public function update(Coin $coin): RedirectResponse
     {
-        $organization->update(
+        $coin->update(
             Request::validate([
-                'name' => ['required', 'max:100'],
-                'email' => ['nullable', 'max:50', 'email'],
-                'phone' => ['nullable', 'max:50'],
-                'address' => ['nullable', 'max:150'],
-                'city' => ['nullable', 'max:50'],
-                'region' => ['nullable', 'max:50'],
-                'country' => ['nullable', 'max:2'],
-                'postal_code' => ['nullable', 'max:25'],
+                'base_asset' => ['required'],
+                'quote_asset' => ['required'],
+                'transfer_fee' => ['required', 'numeric'],
+                'enabled' => ['boolean']
             ])
         );
 
-        return Redirect::back()->with('success', 'Organization updated.');
+        return Redirect::back()->with('success', 'Coin updated.');
     }
 
-    public function destroy(Organization $organization): RedirectResponse
+    public function destroy(Coin $coin): RedirectResponse
     {
-        $organization->delete();
+        $coin->delete();
 
-        return Redirect::back()->with('success', 'Organization deleted.');
+        return Redirect::back()->with('success', '');
     }
 
-    public function restore(Organization $organization): RedirectResponse
+    public function restore(Coin $coin): RedirectResponse
     {
-        $organization->restore();
+        $coin->restore();
 
-        return Redirect::back()->with('success', 'Organization restored.');
+        return Redirect::back()->with('success', 'Coin restored.');
     }
 }
