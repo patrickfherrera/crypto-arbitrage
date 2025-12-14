@@ -66,14 +66,16 @@ class CoinsController extends Controller
 
     public function update(Coin $coin): RedirectResponse
     {
-        $coin->update(
-            Request::validate([
-                'base_asset' => ['required'],
-                'quote_asset' => ['required'],
-                'transfer_fee' => ['required', 'numeric'],
-                'enabled' => ['boolean']
-            ])
-        );
+        $data = Request::validate([
+            'base_asset'   => ['required'],
+            'quote_asset'  => ['required'],
+            'transfer_fee' => ['required', 'numeric'],
+            'enabled'      => ['boolean'],
+        ]);
+
+        $data['symbol'] = $data['base_asset'] . $data['quote_asset'];
+
+        $coin->update($data);
 
         return Redirect::back()->with('success', 'Coin updated.');
     }
