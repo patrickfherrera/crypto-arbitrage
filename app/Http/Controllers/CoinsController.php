@@ -26,6 +26,8 @@ class CoinsController extends Controller
                     'symbol' => $coin->symbol,
                     'base_asset' => $coin->base_asset,
                     'quote_asset' => $coin->quote_asset,
+                    'transfer_fee' => $coin->transfer_fee,
+                    'enabled' => $coin->enabled,
                     'deleted_at' => $coin->deleted_at,
                 ]),
         ]);

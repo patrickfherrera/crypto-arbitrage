@@ -23,6 +23,8 @@
             <th class="pb-4 pt-6 px-6">Symbol</th>
             <th class="pb-4 pt-6 px-6">Base Asset</th>
             <th class="pb-4 pt-6 px-6">Quote Asset</th>
+            <th class="pb-4 pt-6 px-6">Transfer Fee</th>
+            <th class="pb-4 pt-6 px-6">Enabled</th>
           </tr>
         </thead>
         <tbody>
@@ -40,6 +42,16 @@
             <td class="border-t">
               <Link class="flex items-center px-6 py-4" :href="`/coins/${coin.id}/edit`" tabindex="-1">
                 {{ coin.quote_asset }}
+              </Link>
+            </td>
+            <td class="border-t">
+              <Link class="flex items-center px-6 py-4" :href="`/coins/${coin.id}/edit`" tabindex="-1">
+                {{ coin.transfer_fee }}
+              </Link>
+            </td>
+            <td class="border-t">
+              <Link class="flex items-center px-6 py-4" :href="`/coins/${coin.id}/edit`" tabindex="-1">
+                {{ (coin.enabled === 1) ? 'Yes' : 'No' }}
               </Link>
             </td>
             <td class="w-px border-t">
