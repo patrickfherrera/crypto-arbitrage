@@ -27,6 +27,8 @@ class PurgeArbitrageLogs extends Command
      */
     public function handle()
     {
-        ArbitrageLog::where('created_at', '<=', Carbon::now()->subMonth())->forceDelete();
+        ArbitrageLog::where('created_at', '<=', Carbon::now()->subMonth())
+            ->where('status', 'NOT_PROFITABLE')
+            ->forceDelete();
     }
 }

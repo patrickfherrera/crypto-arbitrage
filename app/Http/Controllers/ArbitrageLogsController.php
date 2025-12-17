@@ -30,9 +30,7 @@ class ArbitrageLogsController extends Controller
                 ->paginate(50)
                 ->withQueryString()
                 ->through(fn ($arbitrageLog) => [
-                    'created_at' => Carbon::parse($arbitrageLog->created_at)
-                        ->timezone('Asia/Manila')
-                        ->format('m/d/Y g:iA'),
+                    'created_at' => Carbon::parse($arbitrageLog->created_at)->format('m/d/Y g:iA'),
                     'coin_one_name' => $arbitrageLog->coin_arbitrage->coin_one->symbol,
                     'coin_two_name' => $arbitrageLog->coin_arbitrage->coin_two->symbol,
                     'coin_three_name' => $arbitrageLog->coin_arbitrage->coin_three->symbol,
