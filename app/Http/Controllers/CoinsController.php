@@ -3,9 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Coin;
-use App\Models\Organization;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\Facades\Request;
 use Inertia\Inertia;
@@ -19,7 +17,7 @@ class CoinsController extends Controller
             'filters' => Request::all('search', 'trashed'),
             'coins' => Coin::orderBy('symbol')
                 ->filter(Request::only('search', 'trashed'))
-                ->paginate(10)
+                ->paginate(50)
                 ->withQueryString()
                 ->through(fn ($coin) => [
                     'id' => $coin->id,

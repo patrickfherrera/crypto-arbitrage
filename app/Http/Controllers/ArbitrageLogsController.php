@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ArbitrageLog;
 use App\Models\Contact;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Redirect;
@@ -11,25 +13,33 @@ use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
-class ContactsController extends Controller
+class ArbitrageLogsController extends Controller
 {
     public function index(): Response
     {
-        return Inertia::render('Contacts/Index', [
-            'filters' => Request::all('search', 'trashed'),
-            'contacts' => Auth::user()->account->contacts()
-                ->with('organization')
-                ->orderByName()
-                ->filter(Request::only('search', 'trashed'))
-                ->paginate(10)
+        return Inertia::render('ArbitrageLogs/Index', [
+            'filters' => Request::all('search', 'profitable'),
+            'arbitrageLogs' => ArbitrageLog::with([
+                    'coin_arbitrage',
+                    'coin_arbitrage.coin_one',
+                    'coin_arbitrage.coin_two',
+                    'coin_arbitrage.coin_three'])
+                ->when(Request::filled('profitable'), function ($query) {
+                    $query->where('status', Request::input('profitable'));
+                })
+                ->paginate(50)
                 ->withQueryString()
-                ->through(fn ($contact) => [
-                    'id' => $contact->id,
-                    'name' => $contact->name,
-                    'phone' => $contact->phone,
-                    'city' => $contact->city,
-                    'deleted_at' => $contact->deleted_at,
-                    'organization' => $contact->organization ? $contact->organization->only('name') : null,
+                ->through(fn ($arbitrageLog) => [
+                    'created_at' => Carbon::parse($arbitrageLog->created_at)
+                        ->timezone('Asia/Manila')
+                        ->format('m/d/Y g:iA'),
+                    'coin_one_name' => $arbitrageLog->coin_arbitrage->coin_one->symbol,
+                    'coin_two_name' => $arbitrageLog->coin_arbitrage->coin_two->symbol,
+                    'coin_three_name' => $arbitrageLog->coin_arbitrage->coin_three->symbol,
+                    'capital' => number_format($arbitrageLog->capital, 2),
+                    'profit' => number_format($arbitrageLog->profit, 2),
+                    'final_amount' => number_format($arbitrageLog->final_amount, 2),
+                    'status' => str_replace('_', ' ', $arbitrageLog->status),
                 ]),
         ]);
     }

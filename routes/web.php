@@ -1,7 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
-use App\Http\Controllers\ContactsController;
+use App\Http\Controllers\ArbitrageLogsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ImagesController;
 use App\Http\Controllers\CoinsController;
@@ -101,8 +101,8 @@ Route::put('coins/{coin}/restore', [CoinsController::class, 'restore'])
 
 // Contacts
 
-Route::get('contacts', [ContactsController::class, 'index'])
-    ->name('contacts')
+Route::get('arbitrage-logs', [ArbitrageLogsController::class, 'index'])
+    ->name('arbitrage-logs.index')
     ->middleware('auth');
 
 Route::get('contacts/create', [ContactsController::class, 'create'])
