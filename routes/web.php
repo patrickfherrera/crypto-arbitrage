@@ -1,10 +1,11 @@
 <?php
 
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
-use App\Http\Controllers\ArbitrageLogsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ImagesController;
 use App\Http\Controllers\CoinsController;
+use App\Http\Controllers\ArbitrageController;
+use App\Http\Controllers\ArbitrageLogsController;
 use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\UsersController;
 use Illuminate\Support\Facades\Route;
@@ -99,34 +100,16 @@ Route::put('coins/{coin}/restore', [CoinsController::class, 'restore'])
     ->name('coins.restore')
     ->middleware('auth');
 
-// Contacts
+// Arbitrage
+
+Route::get('arbitrages', [ArbitrageController::class, 'index'])
+    ->name('arbitrages')
+    ->middleware('auth');
+
+// Arbitrage Logs
 
 Route::get('arbitrage-logs', [ArbitrageLogsController::class, 'index'])
     ->name('arbitrage-logs.index')
-    ->middleware('auth');
-
-Route::get('contacts/create', [ContactsController::class, 'create'])
-    ->name('contacts.create')
-    ->middleware('auth');
-
-Route::post('contacts', [ContactsController::class, 'store'])
-    ->name('contacts.store')
-    ->middleware('auth');
-
-Route::get('contacts/{contact}/edit', [ContactsController::class, 'edit'])
-    ->name('contacts.edit')
-    ->middleware('auth');
-
-Route::put('contacts/{contact}', [ContactsController::class, 'update'])
-    ->name('contacts.update')
-    ->middleware('auth');
-
-Route::delete('contacts/{contact}', [ContactsController::class, 'destroy'])
-    ->name('contacts.destroy')
-    ->middleware('auth');
-
-Route::put('contacts/{contact}/restore', [ContactsController::class, 'restore'])
-    ->name('contacts.restore')
     ->middleware('auth');
 
 // Reports
