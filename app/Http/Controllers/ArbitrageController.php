@@ -37,17 +37,27 @@ class ArbitrageController extends Controller
 
     public function create(): Response
     {
-        return Inertia::render('Coins/Create');
+        return Inertia::render('Arbitrages/Create', [
+            'coins' => Coin::all()
+        ]);
     }
 
     public function store(): RedirectResponse
     {
-        Coin::create(
+        CoinArbitrage::create(
             Request::validate([
-                'base_asset' => ['required'],
-                'quote_asset' => ['required'],
-                'transfer_fee' => ['required', 'numeric'],
-                'enabled' => ['boolean']
+                'coin_one_id' => ['required'],
+                'coin_one_price' => ['required'],
+                'coin_one_from_asset' =>  ['required'],
+                'coin_one_to_asset' =>  ['required'],
+                'coin_two_id' => ['required'],
+                'coin_two_price' => ['required'],
+                'coin_two_from_asset' =>  ['required'],
+                'coin_two_to_asset' =>  ['required'],
+                'coin_three_id' => ['required'],
+                'coin_three_price' => ['required'],
+                'coin_three_from_asset' =>  ['required'],
+                'coin_three_to_asset' =>  ['required'],
             ])
         );
 
