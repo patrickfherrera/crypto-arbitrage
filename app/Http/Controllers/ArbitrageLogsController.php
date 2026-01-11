@@ -3,13 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\ArbitrageLog;
-use App\Models\Contact;
 use Carbon\Carbon;
-use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\Facades\Request;
-use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -27,6 +22,7 @@ class ArbitrageLogsController extends Controller
                 ->when(Request::filled('profitable'), function ($query) {
                     $query->where('status', Request::input('profitable'));
                 })
+                ->orderBy('created_at', 'DESC')
                 ->paginate(50)
                 ->withQueryString()
                 ->through(fn ($arbitrageLog) => [
