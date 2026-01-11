@@ -24,7 +24,7 @@
           <th class="pb-4 pt-6 px-6">Final Amount</th>
           <th class="pb-4 pt-6 px-6">Status</th>
         </tr>
-        <tr v-for="arbitrageLog in arbitrageLogs.data" :key="arbitrageLog.id" class="hover:bg-gray-100 focus-within:bg-gray-100">
+        <tr v-for="arbitrageLog in formattedLogs" :key="arbitrageLog.id" class="hover:bg-gray-100 focus-within:bg-gray-100">
           <td class="border-t">
             <div class="flex items-center px-6 py-4 focus:text-indigo-500">
               {{ arbitrageLog.created_at }}
@@ -76,6 +76,7 @@
 </template>
 
 <script>
+import { DateTime } from 'luxon'
 import { Head, Link } from '@inertiajs/vue3'
 import Icon from '@/Shared/Icon.vue'
 import pickBy from 'lodash/pickBy'
@@ -104,6 +105,14 @@ export default {
         search: this.filters.search,
         profitable: this.filters.profitable,
       },
+    }
+  },
+  computed: {
+    formattedLogs() {
+      return this.arbitrageLogs.data.map(arbitrageLog => ({
+        ...arbitrageLog,
+        created_at: DateTime.fromISO(arbitrageLog.created_at).toLocal().toFormat('MM/dd/yyyy h:mma')
+      }))
     }
   },
   watch: {
