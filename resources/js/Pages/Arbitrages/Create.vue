@@ -2,7 +2,7 @@
   <div>
     <Head title="Create Coins" />
     <h1 class="mb-8 text-3xl font-bold">
-      <Link class="text-indigo-400 hover:text-indigo-600" href="/coins">Arbitrage</Link>
+      <Link class="text-indigo-400 hover:text-indigo-600" href="/coins">Arbitrage TEST</Link>
       <span class="text-indigo-400 font-medium">/</span> Create
     </h1>
     <div class="max-w-3xl bg-white rounded-md shadow overflow-hidden">
