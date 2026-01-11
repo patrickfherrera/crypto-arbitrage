@@ -1,12 +1,6 @@
 <template>
   <div>
     <div class="mb-4">
-      <Link class="group flex items-center py-3" href="/">
-        <icon name="dashboard" class="mr-2 w-4 h-4" :class="isUrl('') ? 'fill-white' : 'fill-indigo-400 group-hover:fill-white'" />
-        <div :class="isUrl('') ? 'text-white' : 'text-indigo-300 group-hover:text-white'">Dashboard</div>
-      </Link>
-    </div>
-    <div class="mb-4">
       <Link class="group flex items-center py-3" href="/coins">
         <icon name="office" class="mr-2 w-4 h-4" :class="isUrl('coins') ? 'fill-white' : 'fill-indigo-400 group-hover:fill-white'" />
         <div :class="isUrl('coins') ? 'text-white' : 'text-indigo-300 group-hover:text-white'">Coins</div>
@@ -20,14 +14,8 @@
     </div>
     <div class="mb-4">
       <Link class="group flex items-center py-3" href="/arbitrage-logs">
-        <icon name="users" class="mr-2 w-4 h-4" :class="isUrl('arbitrage-logs') ? 'fill-white' : 'fill-indigo-400 group-hover:fill-white'" />
+        <icon name="printer" class="mr-2 w-4 h-4" :class="isUrl('arbitrage-logs') ? 'fill-white' : 'fill-indigo-400 group-hover:fill-white'" />
         <div :class="isUrl('arbitrage-logs') ? 'text-white' : 'text-indigo-300 group-hover:text-white'">Arbitrage Logs</div>
-      </Link>
-    </div>
-    <div class="mb-4">
-      <Link class="group flex items-center py-3" href="/reports">
-        <icon name="printer" class="mr-2 w-4 h-4" :class="isUrl('reports') ? 'fill-white' : 'fill-indigo-400 group-hover:fill-white'" />
-        <div :class="isUrl('reports') ? 'text-white' : 'text-indigo-300 group-hover:text-white'">Reports</div>
       </Link>
     </div>
   </div>
