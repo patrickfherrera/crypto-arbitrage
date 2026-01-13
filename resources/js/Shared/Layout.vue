@@ -6,7 +6,7 @@
         <div class="md:flex md:shrink-0">
           <div class="flex items-center justify-between px-6 py-4 bg-indigo-900 md:shrink-0 md:justify-center md:w-56">
             <Link class="mt-1" href="/">
-              <logo class="fill-white" width="120" height="28" />
+              <img src="/logo.png" alt="Logo" width="120" />
             </Link>
             <dropdown class="md:hidden" placement="bottom-end">
               <template #default>
