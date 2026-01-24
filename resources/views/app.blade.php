@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-{{--    <link rel="icon" type="image/svg+xml" href="/favicon.svg">--}}
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png">
 
     {{-- Inertia --}}
     <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=smoothscroll,NodeList.prototype.forEach,Promise,Object.values,Object.assign" defer></script>
