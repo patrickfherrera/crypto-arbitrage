@@ -15,9 +15,10 @@
             <option :value="null" />
             <option v-for="coin in coins" :key="coin.id" :value="coin.id">{{ coin.symbol }}</option>
           </select-input>
-          <text-input v-model="form.coin_one_price" :error="form.errors.coin_one_price" class="pb-8 pr-6 w-full lg:w-1/2" label="Coin Price" />
-          <text-input v-model="form.coin_one_from_asset" :error="form.errors.coin_one_from_asset" class="pb-8 pr-6 w-full lg:w-1/2" label="From Asset" />
-          <text-input v-model="form.coin_one_to_asset" :error="form.errors.coin_one_to_asset" class="pb-8 pr-6 w-full lg:w-1/2" label="To Asset" />
+          <select-input v-model="form.coin_one_price" :error="form.errors.coin_one_price" class="pb-8 pr-6 w-full lg:w-1/2" label="Coin Price">
+            <option value="askPrice">askPrice</option>
+            <option value="bidPrice">bidPrice</option>
+          </select-input>
         </div>
         <div class="flex flex-wrap -mb-8 -mr-6 p-8">
           <h2 class="text-2xl font-bold">Coin Two</h2>
@@ -27,9 +28,10 @@
             <option :value="null" />
             <option v-for="coin in coins" :key="coin.id" :value="coin.id">{{ coin.symbol }}</option>
           </select-input>
-          <text-input v-model="form.coin_two_price" :error="form.errors.coin_two_price" class="pb-8 pr-6 w-full lg:w-1/2" label="Coin Price" />
-          <text-input v-model="form.coin_two_from_asset" :error="form.errors.coin_two_from_asset" class="pb-8 pr-6 w-full lg:w-1/2" label="From Asset" />
-          <text-input v-model="form.coin_two_to_asset" :error="form.errors.coin_two_to_asset" class="pb-8 pr-6 w-full lg:w-1/2" label="To Asset" />
+          <select-input v-model="form.coin_two_price" :error="form.errors.coin_two_price" class="pb-8 pr-6 w-full lg:w-1/2" label="Coin Price">
+            <option value="askPrice">askPrice</option>
+            <option value="bidPrice">bidPrice</option>
+          </select-input>
         </div>
         <div class="flex flex-wrap -mb-8 -mr-6 p-8">
           <h2 class="text-2xl font-bold">Coin Three</h2>
@@ -39,9 +41,24 @@
             <option :value="null" />
             <option v-for="coin in coins" :key="coin.id" :value="coin.id">{{ coin.symbol }}</option>
           </select-input>
-          <text-input v-model="form.coin_three_price" :error="form.errors.coin_three_price" class="pb-8 pr-6 w-full lg:w-1/2" label="Coin Price" />
-          <text-input v-model="form.coin_three_from_asset" :error="form.errors.coin_three_from_asset" class="pb-8 pr-6 w-full lg:w-1/2" label="From Asset" />
-          <text-input v-model="form.coin_three_to_asset" :error="form.errors.coin_three_to_asset" class="pb-8 pr-6 w-full lg:w-1/2" label="To Asset" />
+          <select-input v-model="form.coin_three_price" :error="form.errors.coin_three_price" class="pb-8 pr-6 w-full lg:w-1/2" label="Coin Price">
+            <option value="askPrice">askPrice</option>
+            <option value="bidPrice">bidPrice</option>
+          </select-input>
+        </div>
+        <div class="flex flex-wrap -mb-8 -mr-6 p-8">
+          <text-input v-model="form.profit" :error="form.errors.profit" class="pb-8 pr-6 w-full lg:w-1/2" label="Profit" />
+          <text-input v-model="form.capital" :error="form.errors.capital" class="pb-8 pr-6 w-full lg:w-1/2" label="Capital" />
+
+          <select-input v-model="form.test_mode" :error="form.errors.test_mode" class="pb-8 pr-6 w-full lg:w-1/2" label="Test Mode">
+            <option value="0">No</option>
+            <option value="1">Yes</option>
+          </select-input>
+
+          <select-input v-model="form.enabled" :error="form.errors.enabled" class="pb-8 pr-6 w-full lg:w-1/2" label="Enabled">
+            <option value="0">No</option>
+            <option value="1">Yes</option>
+          </select-input>
         </div>
         <div class="flex items-center justify-end px-8 py-4 bg-gray-50 border-t border-gray-100">
           <loading-button :loading="form.processing" class="btn-indigo" type="submit">Create Arbitrage</loading-button>
@@ -76,16 +93,14 @@ export default {
       form: this.$inertia.form({
         coin_one_id: null,
         coin_one_price: null,
-        coin_one_from_asset: null,
-        coin_one_to_asset: null,
         coin_two_id: null,
         coin_two_price: null,
-        coin_two_from_asset: null,
-        coin_two_to_asset: null,
         coin_three_id: null,
         coin_three_price: null,
-        coin_three_from_asset: null,
-        coin_three_to_asset: null,
+        profit: null,
+        capital: null,
+        test_mode: 1,
+        enabled: 0,
       }),
     }
   },

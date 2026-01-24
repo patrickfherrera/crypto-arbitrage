@@ -48,20 +48,18 @@ class ArbitrageController extends Controller
             Request::validate([
                 'coin_one_id' => ['required'],
                 'coin_one_price' => ['required'],
-                'coin_one_from_asset' =>  ['required'],
-                'coin_one_to_asset' =>  ['required'],
                 'coin_two_id' => ['required'],
                 'coin_two_price' => ['required'],
-                'coin_two_from_asset' =>  ['required'],
-                'coin_two_to_asset' =>  ['required'],
                 'coin_three_id' => ['required'],
                 'coin_three_price' => ['required'],
-                'coin_three_from_asset' =>  ['required'],
-                'coin_three_to_asset' =>  ['required'],
+                'profit' => ['required', 'numeric'],
+                'capital' => ['required', 'numeric'],
+                'test_mode' => ['required', 'boolean'],
+                'enabled' => ['required', 'boolean']
             ])
         );
 
-        return Redirect::route('coins')->with('success', 'Coin created.');
+        return Redirect::route('coins')->with('success', 'Coin Arbitrage created.');
     }
 
     public function edit(Coin $coin): Response
