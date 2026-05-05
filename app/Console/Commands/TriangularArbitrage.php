@@ -117,20 +117,35 @@ class TriangularArbitrage extends Command
 
     protected function fetchPrices(array $symbols)
     {
+        $symbols = array_values(array_unique(array_filter($symbols)));
+        if ($symbols === []) {
+            return null;
+        }
+
         try {
-            $response = Http::get($this->apiUrl . '/ticker/bookTicker');
-            $data = collect($response->json());
+            // Scoped request: only the pairs we need (Binance expects a JSON array string).
+            $response = Http::get($this->apiUrl . '/ticker/bookTicker', [
+                'symbols' => json_encode($symbols),
+            ]);
+
+            $json = $response->json();
+            if (! is_array($json)) {
+                return null;
+            }
+
+            // `symbols=[...]` returns a list; a single-symbol `symbol=` response is one object.
+            $data = collect(isset($json['symbol']) ? [$json] : $json);
 
             return $data->whereIn('symbol', $symbols)
-                ->mapWithKeys(fn($item) => [
+                ->mapWithKeys(fn ($item) => [
                     $item['symbol'] => [
-                        'bidPrice' => (float)$item['bidPrice'],
-                        'askPrice' => (float)$item['askPrice'],
-                    ]
+                        'bidPrice' => (float) $item['bidPrice'],
+                        'askPrice' => (float) $item['askPrice'],
+                    ],
                 ])->toArray();
-
         } catch (\Exception $e) {
-            $this->error("Error fetching prices: " . $e->getMessage());
+            $this->error('Error fetching prices: '.$e->getMessage());
+
             return null;
         }
     }
