@@ -8,27 +8,71 @@ use App\Models\CoinArbitrage;
 use App\Services\BinanceSpotAPI\Market;
 use App\Services\BinanceSpotAPI\Trade;
 use Illuminate\Console\Command;
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 
 class TriangularArbitrage extends Command
 {
     protected $signature = 'arbitrage:run {--interval=5} {--coin_arbitrage_id=}';
+
     protected $description = 'Run triangular arbitrage simulation 24/7 and log results to DB';
 
-    protected $apiUrl = 'https://api.binance.com/api/v3';
+    protected string $apiUrl = 'https://api.binance.com/api/v3';
 
-    public function handle()
+    /** @var array<string, array<string, mixed>> */
+    protected array $exchangeInfoCache = [];
+
+    protected ?PendingRequest $binanceHttp = null;
+
+    protected function binance(): PendingRequest
     {
-        $interval = (int)$this->option('interval'); // seconds between checks
-        $this->info("Starting triangular arbitrage bot");
+        return $this->binanceHttp ??= Http::baseUrl($this->apiUrl)
+            ->timeout(20)
+            ->connectTimeout(10)
+            ->acceptJson();
+    }
+
+    /**
+     * Cached symbol row from /exchangeInfo (filters, etc.).
+     *
+     * @return array<string, mixed>
+     */
+    protected function cachedExchangeSymbol(string $symbol): array
+    {
+        if (! isset($this->exchangeInfoCache[$symbol])) {
+            $response = $this->binance()->get('exchangeInfo', ['symbol' => $symbol]);
+            if (! $response->successful()) {
+                return [];
+            }
+            $json = $response->json();
+            $this->exchangeInfoCache[$symbol] = $json['symbols'][0] ?? [];
+        }
+
+        return $this->exchangeInfoCache[$symbol];
+    }
+
+    public function handle(): int
+    {
+        $interval = max(1, (int) $this->option('interval'));
+        $this->info('Starting triangular arbitrage bot');
 
         $coin_arbitrage = CoinArbitrage::with(['coin_one', 'coin_two', 'coin_three'])
             ->find($this->option('coin_arbitrage_id'));
 
-        while ($coin_arbitrage->enabled) {
-            $this->simulate($coin_arbitrage);
-            sleep($interval); // wait before next check
+        if (! $coin_arbitrage) {
+            $this->error('coin_arbitrage_id not found or invalid.');
+
+            return self::FAILURE;
         }
+
+        $id = $coin_arbitrage->id;
+
+        while (CoinArbitrage::query()->whereKey($id)->where('enabled', true)->exists()) {
+            $this->simulate($coin_arbitrage);
+            sleep($interval);
+        }
+
+        return self::SUCCESS;
     }
 
     protected function simulate(CoinArbitrage $coinArbitrage): void
@@ -39,17 +83,16 @@ class TriangularArbitrage extends Command
             $coinArbitrage->coin_three->symbol,
         ]);
 
-        if (!$prices) {
-            $this->error("Failed to fetch Binance prices.");
+        if (! $prices) {
+            $this->error('Failed to fetch Binance prices.');
+
             return;
         }
 
         $fee = 0.001; // 0.1% per trade
 
-        // Step 1: Determine minimum starting USDT for a valid DOGE purchase
-        $startUSDT = $coinArbitrage->capital; //$this->getMinCapital($coinArbitrage->coin_one, $prices[$coinArbitrage->coin_one->symbol][$coinArbitrage->coin_one_price]);
+        $startUSDT = $coinArbitrage->capital;
 
-        // Step 2: Simulate triangular trade with this capital
         $coinOnePrice = $prices[$coinArbitrage->coin_one->symbol][$coinArbitrage->coin_one_price];
         $coinOneAmount = ($coinArbitrage->coin_one_price === 'askPrice')
             ? ($startUSDT / $coinOnePrice) * (1 - $fee)
@@ -68,21 +111,19 @@ class TriangularArbitrage extends Command
         $profit = $finalUSDT - $startUSDT;
         $status = $profit > 0 ? 'PROFITABLE' : 'NOT_PROFITABLE';
 
-        // Save to DB
         ArbitrageLog::create([
-            'capital'           => $startUSDT,
-            'final_amount'      => $finalUSDT,
-            'profit'            => $profit,
-            'status'            => $status,
+            'capital' => $startUSDT,
+            'final_amount' => $finalUSDT,
+            'profit' => $profit,
+            'status' => $status,
             'coin_arbitrage_id' => $coinArbitrage->id,
-            'created_at'        => now(),
-            'updated_at'        => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
 
-        // Print to console
         if ($profit > 0 && $coinArbitrage->test_mode == 0) {
             $this->info("✅ PROFIT: Start \${$startUSDT}, End \${$finalUSDT}, Profit = \${$profit}");
-            $this->setParams($coinArbitrage, $prices);
+            $this->setParams($coinArbitrage);
         } else {
             $this->warn("❌ LOSS: Start \${$startUSDT}, End \${$finalUSDT}, Profit = \${$profit}");
         }
@@ -93,29 +134,23 @@ class TriangularArbitrage extends Command
      */
     protected function getMinCapital(Coin $coin, float $price): float
     {
-        $response = Http::get("https://api.binance.com/api/v3/exchangeInfo", [
-            "symbol" => $coin->symbol
-        ]);
-        $info = $response->json();
-        $filters = $info['symbols'][0]['filters'];
+        $symbolMeta = $this->cachedExchangeSymbol($coin->symbol);
+        $filters = $symbolMeta['filters'] ?? [];
 
-        $lotSize   = collect($filters)->firstWhere('filterType', 'LOT_SIZE');
-        $notional  = collect($filters)->firstWhere('filterType', 'NOTIONAL');
+        $lotSize = collect($filters)->firstWhere('filterType', 'LOT_SIZE');
+        $notional = collect($filters)->firstWhere('filterType', 'NOTIONAL');
 
-        $stepSize     = (float) $lotSize['stepSize'];
-        $minNotional  = (float) $notional['minNotional'];
+        $stepSize = (float) $lotSize['stepSize'];
+        $minNotional = (float) $notional['minNotional'];
 
-        // Start with Binance minimum notional
         $capital = $minNotional;
 
-        // Round up to nearest step size for quantity
-        $precision = strlen(substr(strrchr(rtrim($stepSize, '0'), "."), 1));
+        $precision = strlen(substr(strrchr(rtrim((string) $stepSize, '0'), '.'), 1));
 
         return round($capital, $precision);
     }
 
-
-    protected function fetchPrices(array $symbols)
+    protected function fetchPrices(array $symbols): ?array
     {
         $symbols = array_values(array_unique(array_filter($symbols)));
         if ($symbols === []) {
@@ -123,17 +158,19 @@ class TriangularArbitrage extends Command
         }
 
         try {
-            // Scoped request: only the pairs we need (Binance expects a JSON array string).
-            $response = Http::get($this->apiUrl . '/ticker/bookTicker', [
+            $response = $this->binance()->get('ticker/bookTicker', [
                 'symbols' => json_encode($symbols),
             ]);
+
+            if (! $response->successful()) {
+                return null;
+            }
 
             $json = $response->json();
             if (! is_array($json)) {
                 return null;
             }
 
-            // `symbols=[...]` returns a list; a single-symbol `symbol=` response is one object.
             $data = collect(isset($json['symbol']) ? [$json] : $json);
 
             return $data->whereIn('symbol', $symbols)
@@ -150,66 +187,65 @@ class TriangularArbitrage extends Command
         }
     }
 
-    protected function setParams(CoinArbitrage $coin_arbitrage)
+    protected function setParams(CoinArbitrage $coin_arbitrage): void
     {
+        $trade = new Trade;
+        $balances = $trade->freeBalancesMap();
+
         $coinOneSide = ($coin_arbitrage->coin_one_price === 'askPrice') ? 'BUY' : 'SELL';
-        $coinOneTradeParams = $this->getTradeParams($coin_arbitrage->coin_one, $coinOneSide, $coin_arbitrage->capital);
-        $coinOneTradeResponse = (new Trade())->newOrder($coinOneTradeParams);
+        $coinOneTradeParams = $this->getTradeParams($coin_arbitrage->coin_one, $coinOneSide, $coin_arbitrage->capital, $balances);
+        $coinOneTradeResponse = $trade->newOrder($coinOneTradeParams);
 
         $this->info($coinOneTradeResponse->getBody()->getContents());
 
         $coinTwoSide = ($coin_arbitrage->coin_two_price === 'askPrice') ? 'BUY' : 'SELL';
-        $coinTwoTradeParams = $this->getTradeParams($coin_arbitrage->coin_two, $coinTwoSide);
-        $coinTwoTradeResponse = (new Trade())->newOrder($coinTwoTradeParams);
+        $coinTwoTradeParams = $this->getTradeParams($coin_arbitrage->coin_two, $coinTwoSide, null, $balances);
+        $coinTwoTradeResponse = $trade->newOrder($coinTwoTradeParams);
 
         $this->info($coinTwoTradeResponse->getBody()->getContents());
 
         $coinThreeSide = ($coin_arbitrage->coin_three_price === 'askPrice') ? 'BUY' : 'SELL';
-        $coinThreeTradeParams = $this->getTradeParams($coin_arbitrage->coin_three, $coinThreeSide);
-        $coinThreeTradeResponse = (new Trade())->newOrder($coinThreeTradeParams);
+        $coinThreeTradeParams = $this->getTradeParams($coin_arbitrage->coin_three, $coinThreeSide, null, $balances);
+        $coinThreeTradeResponse = $trade->newOrder($coinThreeTradeParams);
 
         $this->info($coinThreeTradeResponse->getBody()->getContents());
     }
 
-    protected function getTradeParams(Coin $coin, $side, $capitalUSDT = null)
+    protected function getTradeParams(Coin $coin, string $side, ?float $capitalUSDT = null, ?array $balances = null): array
     {
-        // Get exchange info for symbol
-        $response = Http::get("https://api.binance.com/api/v3/exchangeInfo", [
-            "symbol" => $coin->symbol
-        ]);
-        $info = $response->json();
+        $symbolMeta = $this->cachedExchangeSymbol($coin->symbol);
+        $filters = $symbolMeta['filters'] ?? [];
 
-        $filters = $info['symbols'][0]['filters'];
-
-        $lotSize   = collect($filters)->firstWhere('filterType', 'LOT_SIZE');
-        $stepSize  = (float) $lotSize['stepSize'];
-        $precision = strlen(rtrim(substr(strrchr(rtrim($stepSize, '0'), "."), 1), ".")); // decimals
+        $lotSize = collect($filters)->firstWhere('filterType', 'LOT_SIZE');
+        $stepSize = (float) $lotSize['stepSize'];
+        $precision = strlen(rtrim(substr(strrchr(rtrim((string) $stepSize, '0'), '.'), 1), '.'));
 
         $params = [
-            'symbol'    => $coin->symbol,
-            'type'      => 'MARKET',
-            'timestamp' => (new Market())->CheckServerTime(),
-            'side'      => $side,
+            'symbol' => $coin->symbol,
+            'type' => 'MARKET',
+            'timestamp' => (new Market)->CheckServerTime(),
+            'side' => $side,
         ];
 
         switch (true) {
-            case $side === 'BUY' && $coin->quote_asset == 'USDT';
-                // ✅ Use quoteOrderQty for BUY orders when USDT is the quote
-                $params['quoteOrderQty'] = number_format($capitalUSDT, 2, '.', '');
+            case $side === 'BUY' && $coin->quote_asset == 'USDT':
+                $params['quoteOrderQty'] = number_format((float) $capitalUSDT, 2, '.', '');
 
                 break;
 
-            case $side === 'SELL' && $coin->quote_asset == 'USDT';
-
-                // ✅ Use quantity for SELL orders USDT pairs
-                $balance = (new Trade())->accountInformation($coin->base_asset); // query via /api/v3/account
+            case $side === 'SELL' && $coin->quote_asset == 'USDT':
+                $balance = $balances !== null
+                    ? (float) ($balances[$coin->base_asset] ?? 0)
+                    : (float) (new Trade)->accountInformation($coin->base_asset);
                 $params['quantity'] = floor($balance / $stepSize) * $stepSize;
+
                 break;
 
             default:
-                // ✅ Use quantity for SELL orders (or non-USDT pairs)
-                $balance = (new Trade())->accountInformation($coin->base_asset); // query via /api/v3/account
-                $qty = floor($balance / $stepSize) * $stepSize; // round down to stepSize
+                $balance = $balances !== null
+                    ? (float) ($balances[$coin->base_asset] ?? 0)
+                    : (float) (new Trade)->accountInformation($coin->base_asset);
+                $qty = floor($balance / $stepSize) * $stepSize;
                 $params['quantity'] = round($qty, $precision);
         }
 

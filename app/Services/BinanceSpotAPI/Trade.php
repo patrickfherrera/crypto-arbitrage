@@ -63,11 +63,46 @@ class Trade extends Base
 
         $decodedResponse = json_decode($response);
 
-        foreach($decodedResponse->balances as $balance) {
-
+        foreach ($decodedResponse->balances as $balance) {
             if ($balance->asset == $coin_asset) {
                 return doubleval($balance->free);
             }
         }
+    }
+
+    /**
+     * One signed /api/v3/account call; all free balances (for batching trade prep).
+     *
+     * @return array<string, float>
+     */
+    public function freeBalancesMap(): array
+    {
+        $client = new Client();
+
+        $params = [
+            'timestamp' => (new Market)->CheckServerTime(),
+        ];
+
+        $queryString = http_build_query($params);
+
+        $response = $client->get(env('BINANCE_API').'/api/v3/account?'.$queryString.'&signature='.$this->signature($queryString), [
+            'headers' => [
+                'X-MBX-APIKEY' => env('BINANCE_API_KEY'),
+                'Content-Type' => 'application/json',
+            ],
+        ])->getBody()->getContents();
+
+        $decodedResponse = json_decode($response);
+
+        if (! isset($decodedResponse->balances) || ! is_array($decodedResponse->balances)) {
+            return [];
+        }
+
+        $map = [];
+        foreach ($decodedResponse->balances as $balance) {
+            $map[$balance->asset] = (float) $balance->free;
+        }
+
+        return $map;
     }
 }
