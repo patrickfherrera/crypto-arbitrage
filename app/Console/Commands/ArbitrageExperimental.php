@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\CoinArbitrage;
+use App\Models\Coin;
 use App\Models\ProfitValue;
 use App\Services\BinanceSpotAPI\Convert;
 use GuzzleHttp\Exception\ClientException;
@@ -16,131 +17,138 @@ class ArbitrageExperimental extends Command
      *
      * @var string
      */
-    protected $signature = 'app:arbitrage-experimental {--coin_arbitrage_id=}';
+    protected $signature = 'app:arbitrage-experimental {--coin_arbitrage_id=1} {--interval=5}';
 
     /**
      * The console command description.
      *
      * @var string
      */
-    protected $description = 'Command description';
-
-    /**
-     * @var int
-     */
-    protected $count = 0;
-
-    protected $rate_limit = 86400;
-
-    private function convertCoin($coinConvertParams)
-    {
-        $convertCoinSendQuoteResponse = (new Convert())->sendQuote($coinConvertParams);
-
-        $this->count += 1;
-
-        $this->info($this->count);
-
-        sleep(1);
-
-        if ($convertCoinSendQuoteResponse instanceof ClientException) {
-            $this->info(json_encode($coinConvertParams));
-            $this->info($convertCoinSendQuoteResponse->getMessage());
-            exit();
-        }
-
-        $decodedCoinSendQuoteResponse = json_decode($convertCoinSendQuoteResponse->getBody()->getContents(), true);
-
-        if (!Arr::has($decodedCoinSendQuoteResponse, 'quoteId')) {
-            exit();
-        }
-
-        $this->info($decodedCoinSendQuoteResponse['quoteId']);
-
-        return $decodedCoinSendQuoteResponse;
-
-    }
+    protected $description = 'Run Binance Convert triangular quotes, log results (test_mode skips accept)';
 
     /**
      * Execute the console command.
      */
     public function handle()
     {
-        $coin_arbitrage = CoinArbitrage::with(['coin_one', 'coin_two', 'coin_three'])->find($this->option('coin_arbitrage_id'));
+        $interval = max(1, (int) $this->option('interval'));
 
-        do {
+        $coinArbitrage = CoinArbitrage::with(['coin_one', 'coin_two', 'coin_three'])
+            ->find($this->option('coin_arbitrage_id'));
 
-            $coin_one = $coin_arbitrage->coin_one;
-            $coin_one_from_asset = $coin_arbitrage->coin_one_from_asset;
-            $coin_one_to_asset = $coin_arbitrage->coin_one_to_asset;
+        if (is_null($coinArbitrage)) {
+            $this->error('coin_arbitrage_id not found or invalid.');
+            return self::FAILURE;
+        }
 
-            $coinOneConvertParams = [
-                'fromAsset' => $coin_one->$coin_one_from_asset,
-                'toAsset' => $coin_one->$coin_one_to_asset,
-                'toAmount' => round($coin_arbitrage->quantity, 8)
+        $id = $coinArbitrage->id;
+        $this->info("Starting Convert arb for #{$id}");
+
+        while (CoinArbitrage::query()->whereKey($id)->where('enabled', true)->exists()) {
+            $coinArbitrage->refresh();
+            $coinArbitrage->load(['coin_one', 'coin_two', 'coin_three']);
+            $this->scan($coinArbitrage);
+            sleep($interval);
+        }
+        return self::SUCCESS;
+    }
+
+    protected function scan(CoinArbitrage $coinArbitrage): void
+    {
+        $leg1 = $this->direction($coinArbitrage->coin_one, $coinArbitrage->coin_one_price);
+        $leg2 = $this->direction($coinArbitrage->coin_two, $coinArbitrage->coin_two_price);
+        $leg3 = $this->direction($coinArbitrage->coin_three, $coinArbitrage->coin_three_price);
+
+        // Leg 1: spend capital (USDT) as fromAmount
+        $quote1 = $this->requestQuote([
+            'fromAsset' => $leg1['from'],
+            'toAsset' => $leg1['to'],
+            'fromAmount' => round((float) $coinArbitrage->capital, 8),
+        ]);
+dd($quote1); 
+        if (! $quote1) {
+            return;
+        }
+
+        $quote2 = $this->requestQuote([
+            'fromAsset' => $leg2['from'],
+            'toAsset' => $leg2['to'],
+            'fromAmount' => $quote1['toAmount'],
+        ]);
+        if (! $quote2) {
+            return;
+        }
+        $quote3 = $this->requestQuote([
+            'fromAsset' => $leg3['from'],
+            'toAsset' => $leg3['to'],
+            'fromAmount' => $quote2['toAmount'],
+        ]);
+        if (! $quote3) {
+            return;
+        }
+        $initial = (float) $quote1['fromAmount'];
+        $final = (float) $quote3['toAmount'];
+        $profit = $final - $initial;
+        ProfitValue::create([
+            'value' => $profit,
+            'initial_usdt_value' => $initial,
+            'final_usdt_value' => $final,
+            'coin_arbitrage_id' => $coinArbitrage->id,
+            'coin_arbitrage_profit' => $coinArbitrage->profit,
+            'coin_one_quote_response' => json_encode($quote1),
+            'coin_two_quote_response' => json_encode($quote2),
+            'coin_three_quote_response' => json_encode($quote3),
+        ]);
+        if ($profit > 0) {
+            $this->info("PROFITABLE: {$initial} → {$final} (profit={$profit})");
+        } else {
+            $this->warn("NOT_PROFITABLE: {$initial} → {$final} (profit={$profit})");
+        }
+        // Phase 1: never accept quotes in test mode
+        if ($profit > 0 && (int) $coinArbitrage->test_mode === 0) {
+            $convert = new Convert;
+            $convert->acceptQuote(['quoteId' => $quote1['quoteId']]);
+            $convert->acceptQuote(['quoteId' => $quote2['quoteId']]);
+            $convert->acceptQuote(['quoteId' => $quote3['quoteId']]);
+            $this->info('Accepted all three Convert quotes.');
+        }
+    }
+
+    /**
+     * askPrice = buy base with quote → from quote, to base
+     * bidPrice = sell base for quote → from base, to quote
+     *
+     * @return array{from: string, to: string}
+     */
+    protected function direction(Coin $coin, string $priceSide): array
+    {
+        if ($priceSide === 'askPrice') {
+            return [
+                'from' => $coin->quote_asset,
+                'to' => $coin->base_asset,
             ];
+        }
+        return [
+            'from' => $coin->base_asset,
+            'to' => $coin->quote_asset,
+        ];
+    }
 
-            $coinOneQuoteConvertResponse = $this->convertCoin($coinOneConvertParams);
-
-            $coin_two = $coin_arbitrage->coin_two;
-            $coin_two_from_asset = $coin_arbitrage->coin_two_from_asset;
-            $coin_two_to_asset = $coin_arbitrage->coin_two_to_asset;
-
-            $coinTwoConvertParams = [
-                'fromAsset' => $coin_two->$coin_two_from_asset,
-                'toAsset' => $coin_two->$coin_two_to_asset,
-                'fromAmount' => $coinOneQuoteConvertResponse['toAmount']
-            ];
-
-            $coinTwoQuoteConvertResponse = $this->convertCoin($coinTwoConvertParams);
-
-            $coin_three = $coin_arbitrage->coin_three;
-            $coin_three_from_asset = $coin_arbitrage->coin_three_from_asset;
-            $coin_three_to_asset = $coin_arbitrage->coin_three_to_asset;
-
-            $coinThreeConvertSendQuoteParams = [
-                'fromAsset' => $coin_three->$coin_three_from_asset,
-                'toAsset' => $coin_three->$coin_three_to_asset,
-                'fromAmount' => $coinTwoQuoteConvertResponse['toAmount']
-            ];
-
-            $coinThreeQuoteConvertResponse = $this->convertCoin($coinThreeConvertSendQuoteParams);
-
-            $initialUsdtValue = $coinOneQuoteConvertResponse['fromAmount'];
-            $finalUsdtValue = $coinThreeQuoteConvertResponse['toAmount'];
-
-            $profit = $finalUsdtValue - $initialUsdtValue;
-
-            if ($profit > 0) {
-                $convertCoinOneAcceptParams = [
-                    'quoteId' => $coinOneQuoteConvertResponse['quoteId']
-                ];
-
-                (new Convert())->acceptQuote($convertCoinOneAcceptParams);
-
-                $convertCoinTwoAcceptParams = [
-                    'quoteId' => $coinTwoQuoteConvertResponse['quoteId']
-                ];
-
-                (new Convert())->acceptQuote($convertCoinTwoAcceptParams);
-
-                $convertCoinThreeAcceptParams = [
-                    'quoteId' => $coinThreeQuoteConvertResponse['quoteId']
-                ];
-
-                (new Convert())->acceptQuote($convertCoinThreeAcceptParams);
-            }
-
-            ProfitValue::create([
-                'value' => $profit,
-                'initial_usdt_value' => $initialUsdtValue,
-                'final_usdt_value' => $finalUsdtValue,
-                'coin_arbitrage_id' => $coin_arbitrage->id,
-                'coin_arbitrage_profit' => $coin_arbitrage->profit,
-                'coin_one_quote_response' => json_encode($coinOneQuoteConvertResponse),
-                'coin_two_quote_response' => json_encode($coinTwoQuoteConvertResponse),
-                'coin_three_quote_response' => json_encode($coinThreeQuoteConvertResponse),
-            ]);
-
-        } while ($this->count <= $this->rate_limit);
+    protected function requestQuote(array $params): ?array
+    {
+        $response = (new Convert)->sendQuote($params);
+        dd($response); 
+        sleep(1); // Convert rate limit breathing room
+        if ($response instanceof ClientException) {
+            $this->error('Convert quote failed: '.$response->getMessage());
+            $this->line(json_encode($params));
+            return null;
+        }
+        $decoded = json_decode($response->getBody()->getContents(), true);
+        if (! is_array($decoded) || ! Arr::has($decoded, 'quoteId')) {
+            $this->error('Convert quote missing quoteId: '.json_encode($decoded));
+            return null;
+        }
+        return $decoded;
     }
 }
