@@ -17,7 +17,7 @@ class ArbitrageExperimental extends Command
      *
      * @var string
      */
-    protected $signature = 'app:arbitrage-experimental {--coin_arbitrage_id=1} {--interval=5}';
+    protected $signature = 'app:arbitrage-experimental {--coin_arbitrage_id=1} {--interval=60}';
 
     /**
      * The console command description.
