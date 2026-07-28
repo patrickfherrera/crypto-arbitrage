@@ -2,9 +2,9 @@
 
 namespace App\Console\Commands;
 
+use App\Models\ArbitrageLog;
 use App\Models\CoinArbitrage;
 use App\Models\Coin;
-use App\Models\ProfitValue;
 use App\Services\BinanceSpotAPI\Convert;
 use GuzzleHttp\Exception\ClientException;
 use Illuminate\Console\Command;
@@ -59,13 +59,15 @@ class ArbitrageExperimental extends Command
         $leg2 = $this->direction($coinArbitrage->coin_two, $coinArbitrage->coin_two_price);
         $leg3 = $this->direction($coinArbitrage->coin_three, $coinArbitrage->coin_three_price);
 
+        $requireQuoteId = (int) $coinArbitrage->test_mode === 0;
+
         // Leg 1: spend capital (USDT) as fromAmount
         $quote1 = $this->requestQuote([
             'fromAsset' => $leg1['from'],
             'toAsset' => $leg1['to'],
             'fromAmount' => round((float) $coinArbitrage->capital, 8),
-        ]);
-dd($quote1); 
+        ], $requireQuoteId);
+
         if (! $quote1) {
             return;
         }
@@ -74,36 +76,41 @@ dd($quote1);
             'fromAsset' => $leg2['from'],
             'toAsset' => $leg2['to'],
             'fromAmount' => $quote1['toAmount'],
-        ]);
+        ], $requireQuoteId);
+
         if (! $quote2) {
             return;
         }
+
         $quote3 = $this->requestQuote([
             'fromAsset' => $leg3['from'],
             'toAsset' => $leg3['to'],
             'fromAmount' => $quote2['toAmount'],
-        ]);
+        ], $requireQuoteId);
+
         if (! $quote3) {
             return;
         }
+
         $initial = (float) $quote1['fromAmount'];
         $final = (float) $quote3['toAmount'];
         $profit = $final - $initial;
-        ProfitValue::create([
-            'value' => $profit,
-            'initial_usdt_value' => $initial,
-            'final_usdt_value' => $final,
+        $status = $profit > 0 ? 'PROFITABLE' : 'NOT_PROFITABLE';
+
+        ArbitrageLog::create([
+            'capital' => $initial,
+            'final_amount' => $final,
+            'profit' => $profit,
+            'status' => $status,
             'coin_arbitrage_id' => $coinArbitrage->id,
-            'coin_arbitrage_profit' => $coinArbitrage->profit,
-            'coin_one_quote_response' => json_encode($quote1),
-            'coin_two_quote_response' => json_encode($quote2),
-            'coin_three_quote_response' => json_encode($quote3),
         ]);
+
         if ($profit > 0) {
             $this->info("PROFITABLE: {$initial} → {$final} (profit={$profit})");
         } else {
             $this->warn("NOT_PROFITABLE: {$initial} → {$final} (profit={$profit})");
         }
+
         // Phase 1: never accept quotes in test mode
         if ($profit > 0 && (int) $coinArbitrage->test_mode === 0) {
             $convert = new Convert;
@@ -134,21 +141,28 @@ dd($quote1);
         ];
     }
 
-    protected function requestQuote(array $params): ?array
+    protected function requestQuote(array $params, bool $requireQuoteId = true): ?array
     {
         $response = (new Convert)->sendQuote($params);
-        dd($response); 
-        sleep(1); // Convert rate limit breathing room
+    
+        sleep(1);
         if ($response instanceof ClientException) {
             $this->error('Convert quote failed: '.$response->getMessage());
             $this->line(json_encode($params));
             return null;
         }
+    
         $decoded = json_decode($response->getBody()->getContents(), true);
-        if (! is_array($decoded) || ! Arr::has($decoded, 'quoteId')) {
+        if (! is_array($decoded) || ! Arr::has($decoded, ['fromAmount', 'toAmount'])) {
+            $this->error('Convert quote invalid: '.json_encode($decoded));
+            return null;
+        }
+    
+        if ($requireQuoteId && ! Arr::has($decoded, 'quoteId')) {
             $this->error('Convert quote missing quoteId: '.json_encode($decoded));
             return null;
         }
+    
         return $decoded;
     }
 }
