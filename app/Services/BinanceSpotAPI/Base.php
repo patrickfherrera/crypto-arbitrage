@@ -12,6 +12,6 @@ class Base
      */
     protected function signature($query_string)
     {
-        return hash_hmac('sha256', $query_string, env('BINANCE_API_SECRET'));
+        return hash_hmac('sha256', $query_string, config('binance.api_secret'));
     }
 }

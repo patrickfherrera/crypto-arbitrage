@@ -25,9 +25,9 @@ class Trade extends Base
 
             $client = new Client();
 
-            return $client->post(env("BINANCE_API") . env("BINANCE_API_ORDER_URL") . $queryString . '&signature=' . $this->signature($queryString) , [
+            return $client->post(config('binance.api') . config('binance.order_url') . $queryString . '&signature=' . $this->signature($queryString) , [
                 'headers' => [
-                    'X-MBX-APIKEY' => env('BINANCE_API_KEY'),
+                    'X-MBX-APIKEY' => config('binance.api_key'),
                     'Content-Type' => 'application/json',
                 ]
             ]);
@@ -54,9 +54,9 @@ class Trade extends Base
 
         $queryString = http_build_query($params);
 
-        $response = $client->get(env("BINANCE_API") . '/api/v3/account?' . $queryString . '&signature=' . $this->signature($queryString) , [
+        $response = $client->get(config('binance.api') . '/api/v3/account?' . $queryString . '&signature=' . $this->signature($queryString) , [
             'headers' => [
-                'X-MBX-APIKEY' => env('BINANCE_API_KEY'),
+                'X-MBX-APIKEY' => config('binance.api_key'),
                 'Content-Type' => 'application/json',
             ]
         ])->getBody()->getContents();
@@ -85,9 +85,9 @@ class Trade extends Base
 
         $queryString = http_build_query($params);
 
-        $response = $client->get(env('BINANCE_API').'/api/v3/account?'.$queryString.'&signature='.$this->signature($queryString), [
+        $response = $client->get(config('binance.api').'/api/v3/account?'.$queryString.'&signature='.$this->signature($queryString), [
             'headers' => [
-                'X-MBX-APIKEY' => env('BINANCE_API_KEY'),
+                'X-MBX-APIKEY' => config('binance.api_key'),
                 'Content-Type' => 'application/json',
             ],
         ])->getBody()->getContents();

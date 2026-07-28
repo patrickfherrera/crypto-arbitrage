@@ -25,9 +25,9 @@ class Convert extends Base
 
             $client = new Client();
 
-            return $client->post(env("BINANCE_API") . env("BINANCE_API_SEND_QUOTE_CONVERT_URL") . $queryString . '&signature=' . $this->signature($queryString), [
+            return $client->post(config('binance.api') . config('binance.send_quote_convert_url') . $queryString . '&signature=' . $this->signature($queryString), [
                 'headers' => [
-                    'X-MBX-APIKEY' => env('BINANCE_API_KEY'),
+                    'X-MBX-APIKEY' => config('binance.api_key'),
                     'Content-Type' => 'application/json',
                 ]
             ]);
@@ -56,9 +56,9 @@ class Convert extends Base
 
             $client = new Client();
 
-            return $client->post(env("BINANCE_API") . env("BINANCE_API_ACCEPT_QUOTE_CONVERT_URL")  . $queryString . '&signature=' . $this->signature($queryString) , [
+            return $client->post(config('binance.api') . config('binance.accept_quote_convert_url')  . $queryString . '&signature=' . $this->signature($queryString) , [
                 'headers' => [
-                    'X-MBX-APIKEY' => env('BINANCE_API_KEY'),
+                    'X-MBX-APIKEY' => config('binance.api_key'),
                     'Content-Type' => 'application/json',
                 ]
             ]);

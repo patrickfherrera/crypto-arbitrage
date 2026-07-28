@@ -17,7 +17,7 @@ class Market
     {
         $client = new Client();
 
-        $response = $client->get(env("BINANCE_API") . '/api/v3/time', [
+        $response = $client->get(config('binance.api') . '/api/v3/time', [
             'headers' => [
                 'Content-Type' => 'application/json',
             ]
@@ -37,7 +37,7 @@ class Market
     {
         $client = new Client();
 
-        $response = $client->get(env("BINANCE_API") . '/api/v3/ticker/price?symbol=' . $coin->symbol, [
+        $response = $client->get(config('binance.api') . '/api/v3/ticker/price?symbol=' . $coin->symbol, [
             'headers' => [
                 'Content-Type' => 'application/json',
             ]
@@ -56,9 +56,9 @@ class Market
     {
         $client = new Client();
 
-        $response = $client->get(env("BINANCE_API") . '/api/v3/ticker/24hr?symbol=' . $coin->symbol, [
+        $response = $client->get(config('binance.api') . '/api/v3/ticker/24hr?symbol=' . $coin->symbol, [
             'headers' => [
-                'X-MBX-APIKEY' => env('BINANCE_API_KEY'),
+                'X-MBX-APIKEY' => config('binance.api_key'),
                 'Content-Type' => 'application/json',
             ]
         ])->getBody()->getContents();
