@@ -10,6 +10,7 @@ use App\Services\BinanceSpotAPI\Trade;
 use Illuminate\Console\Command;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
+use App\Services\Binance\BookTickerStore;
 
 class TriangularArbitrage extends Command
 {
@@ -156,33 +157,30 @@ class TriangularArbitrage extends Command
         if ($symbols === []) {
             return null;
         }
-
+    
         try {
-            $response = $this->binance()->get('ticker/bookTicker', [
-                'symbols' => json_encode($symbols),
-            ]);
-
-            if (! $response->successful()) {
+            $prices = app(BookTickerStore::class)->getMany($symbols);
+            if ($prices === null) {
+                $this->error('Missing Redis bookTicker for one or more symbols: '.implode(', ', $symbols));
+    
                 return null;
             }
-
-            $json = $response->json();
-            if (! is_array($json)) {
-                return null;
+    
+            // Drop stale quotes (2s). Feed must be running.
+            $nowMs = (int) (microtime(true) * 1000);
+            foreach ($prices as $symbol => $row) {
+                $ts = (int) ($row['ts'] ?? 0);
+                if ($ts > 0 && ($nowMs - $ts) > 2000) {
+                    $this->error("Stale Redis bookTicker for {$symbol}");
+    
+                    return null;
+                }
             }
-
-            $data = collect(isset($json['symbol']) ? [$json] : $json);
-
-            return $data->whereIn('symbol', $symbols)
-                ->mapWithKeys(fn ($item) => [
-                    $item['symbol'] => [
-                        'bidPrice' => (float) $item['bidPrice'],
-                        'askPrice' => (float) $item['askPrice'],
-                    ],
-                ])->toArray();
+    
+            return $prices;
         } catch (\Exception $e) {
-            $this->error('Error fetching prices: '.$e->getMessage());
-
+            $this->error('Error reading prices from Redis: '.$e->getMessage());
+    
             return null;
         }
     }
