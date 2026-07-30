@@ -37,11 +37,7 @@
           </td>
           <td class="border-t">
             <Link class="flex items-center px-6 py-4" :href="`/arbitrages/${arbitrage.id}/edit`" tabindex="-1">
-              {{
-                (arbitrage.coin_one_price) === 'askPrice'
-                  ? arbitrage.coin_one.base_asset + ' -> ' + arbitrage.coin_one.quote_asset
-                  : arbitrage.coin_one.quote_asset + ' -> ' + arbitrage.coin_one.base_asset
-              }}
+              {{ directionLabel(arbitrage.coin_one, arbitrage.coin_one_price) }}
             </Link>
           </td>
           <td class="border-t">
@@ -51,11 +47,7 @@
           </td>
           <td class="border-t">
             <Link class="flex items-center px-6 py-4" :href="`/arbitrages/${arbitrage.id}/edit`" tabindex="-1">
-              {{
-                (arbitrage.coin_two_price) === 'bidPrice'
-                  ? arbitrage.coin_two.quote_asset + ' -> ' + arbitrage.coin_two.base_asset
-                  : arbitrage.coin_two.base_asset + ' -> ' + arbitrage.coin_two.quote_asset
-              }}
+              {{ directionLabel(arbitrage.coin_two, arbitrage.coin_two_price) }}
             </Link>
           </td>
           <td class="border-t">
@@ -65,11 +57,7 @@
           </td>
           <td class="border-t">
             <Link class="flex items-center px-6 py-4" :href="`/arbitrages/${arbitrage.id}/edit`" tabindex="-1">
-              {{
-                (arbitrage.coin_three_price) === 'bidPrice'
-                  ? arbitrage.coin_three.quote_asset + ' -> ' + arbitrage.coin_three.base_asset
-                  : arbitrage.coin_three.base_asset + ' -> ' + arbitrage.coin_three.quote_asset
-              }}
+              {{ directionLabel(arbitrage.coin_three, arbitrage.coin_three_price) }}
             </Link>
           </td>
           <td class="w-px border-t">
@@ -128,6 +116,13 @@ export default {
     },
   },
   methods: {
+    directionLabel(coin, priceSide) {
+      // ask = buy base with quote; bid = sell base for quote
+      if (priceSide === 'askPrice') {
+        return `${coin.quote_asset} → ${coin.base_asset}`
+      }
+      return `${coin.base_asset} → ${coin.quote_asset}`
+    },
     reset() {
       this.form = mapValues(this.form, () => null)
     },

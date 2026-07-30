@@ -16,8 +16,8 @@
             <option v-for="coin in coins" :key="coin.id" :value="coin.id">{{ coin.symbol }}</option>
           </select-input>
           <select-input v-model="form.coin_one_price" :error="form.errors.coin_one_price" class="pb-8 pr-6 w-full lg:w-1/2" label="Coin Price">
-            <option value="askPrice">askPrice</option>
-            <option value="bidPrice">bidPrice</option>
+            <option value="askPrice">askPrice (quote → base / buy)</option>
+            <option value="bidPrice">bidPrice (base → quote / sell)</option>
           </select-input>
         </div>
         <div class="flex flex-wrap -mb-8 -mr-6 p-8">
@@ -29,8 +29,8 @@
             <option v-for="coin in coins" :key="coin.id" :value="coin.id">{{ coin.symbol }}</option>
           </select-input>
           <select-input v-model="form.coin_two_price" :error="form.errors.coin_two_price" class="pb-8 pr-6 w-full lg:w-1/2" label="Coin Price">
-            <option value="askPrice">askPrice</option>
-            <option value="bidPrice">bidPrice</option>
+            <option value="askPrice">askPrice (quote → base / buy)</option>
+            <option value="bidPrice">bidPrice (base → quote / sell)</option>
           </select-input>
         </div>
         <div class="flex flex-wrap -mb-8 -mr-6 p-8">
@@ -42,8 +42,8 @@
             <option v-for="coin in coins" :key="coin.id" :value="coin.id">{{ coin.symbol }}</option>
           </select-input>
           <select-input v-model="form.coin_three_price" :error="form.errors.coin_three_price" class="pb-8 pr-6 w-full lg:w-1/2" label="Coin Price">
-            <option value="askPrice">askPrice</option>
-            <option value="bidPrice">bidPrice</option>
+            <option value="askPrice">askPrice (quote → base / buy)</option>
+            <option value="bidPrice">bidPrice (base → quote / sell)</option>
           </select-input>
         </div>
         <div class="flex flex-wrap -mb-8 -mr-6 p-8">

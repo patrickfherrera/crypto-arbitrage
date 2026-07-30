@@ -55,70 +55,91 @@ class ArbitrageExperimental extends Command
 
     protected function scan(CoinArbitrage $coinArbitrage): void
     {
-        $leg1 = $this->direction($coinArbitrage->coin_one, $coinArbitrage->coin_one_price);
-        $leg2 = $this->direction($coinArbitrage->coin_two, $coinArbitrage->coin_two_price);
-        $leg3 = $this->direction($coinArbitrage->coin_three, $coinArbitrage->coin_three_price);
-
         $requireQuoteId = (int) $coinArbitrage->test_mode === 0;
-
-        // Leg 1: spend capital (USDT) as fromAmount
-        $quote1 = $this->requestQuote([
-            'fromAsset' => $leg1['from'],
-            'toAsset' => $leg1['to'],
-            'fromAmount' => round((float) $coinArbitrage->capital, 8),
-        ], $requireQuoteId);
-
-        if (! $quote1) {
+        $capital = round((float) $coinArbitrage->capital, 8);
+        $minProfit = (float) ($coinArbitrage->profit ?? 0);
+    
+        $forward = $this->quotePath([
+            ['coin' => $coinArbitrage->coin_one, 'side' => $coinArbitrage->coin_one_price],
+            ['coin' => $coinArbitrage->coin_two, 'side' => $coinArbitrage->coin_two_price],
+            ['coin' => $coinArbitrage->coin_three, 'side' => $coinArbitrage->coin_three_price],
+        ], $capital, $requireQuoteId, 'forward');
+    
+        // Reverse cycle: flip order + flip ask/bid on each leg
+        $reverse = $this->quotePath([
+            ['coin' => $coinArbitrage->coin_three, 'side' => $this->flipSide($coinArbitrage->coin_three_price)],
+            ['coin' => $coinArbitrage->coin_two, 'side' => $this->flipSide($coinArbitrage->coin_two_price)],
+            ['coin' => $coinArbitrage->coin_one, 'side' => $this->flipSide($coinArbitrage->coin_one_price)],
+        ], $capital, $requireQuoteId, 'reverse');
+    
+        $candidates = array_values(array_filter([$forward, $reverse]));
+        if ($candidates === []) {
             return;
         }
-
-        $quote2 = $this->requestQuote([
-            'fromAsset' => $leg2['from'],
-            'toAsset' => $leg2['to'],
-            'fromAmount' => $quote1['toAmount'],
-        ], $requireQuoteId);
-
-        if (! $quote2) {
-            return;
-        }
-
-        $quote3 = $this->requestQuote([
-            'fromAsset' => $leg3['from'],
-            'toAsset' => $leg3['to'],
-            'fromAmount' => $quote2['toAmount'],
-        ], $requireQuoteId);
-
-        if (! $quote3) {
-            return;
-        }
-
-        $initial = (float) $quote1['fromAmount'];
-        $final = (float) $quote3['toAmount'];
-        $profit = $final - $initial;
-        $status = $profit > 0 ? 'PROFITABLE' : 'NOT_PROFITABLE';
-
+    
+        usort($candidates, fn ($a, $b) => $b['profit'] <=> $a['profit']);
+        $best = $candidates[0];
+    
         ArbitrageLog::create([
-            'capital' => $initial,
-            'final_amount' => $final,
-            'profit' => $profit,
-            'status' => $status,
+            'capital' => $best['initial'],
+            'final_amount' => $best['final'],
+            'profit' => $best['profit'],
+            'status' => $best['profit'] > 0 ? 'PROFITABLE' : 'NOT_PROFITABLE',
             'coin_arbitrage_id' => $coinArbitrage->id,
         ]);
-
-        if ($profit > 0) {
-            $this->info("PROFITABLE: {$initial} → {$final} (profit={$profit})");
-        } else {
-            $this->warn("NOT_PROFITABLE: {$initial} → {$final} (profit={$profit})");
-        }
-
-        // Phase 1: never accept quotes in test mode
-        if ($profit > 0 && (int) $coinArbitrage->test_mode === 0) {
+    
+        // Accept only if profitable AND >= CoinArbitrage.profit threshold
+        if (
+            $best['profit'] > 0
+            && $best['profit'] >= $minProfit
+            && (int) $coinArbitrage->test_mode === 0
+            && ! empty($best['quoteIds'])
+        ) {
             $convert = new Convert;
-            $convert->acceptQuote(['quoteId' => $quote1['quoteId']]);
-            $convert->acceptQuote(['quoteId' => $quote2['quoteId']]);
-            $convert->acceptQuote(['quoteId' => $quote3['quoteId']]);
-            $this->info('Accepted all three Convert quotes.');
+            foreach ($best['quoteIds'] as $quoteId) {
+                $convert->acceptQuote(['quoteId' => $quoteId]);
+            }
         }
+    }
+    
+    protected function flipSide(string $priceSide): string
+    {
+        return $priceSide === 'askPrice' ? 'bidPrice' : 'askPrice';
+    }
+    
+    /** Walk 3 Convert quotes; return initial/final/profit/quoteIds or null */
+    protected function quotePath(array $legs, float $capital, bool $requireQuoteId, string $direction): ?array
+    {
+        $amount = $capital;
+        $initial = null;
+        $quoteIds = [];
+    
+        foreach ($legs as $index => $leg) {
+            $flow = $this->direction($leg['coin'], $leg['side']);
+            $quote = $this->requestQuote([
+                'fromAsset' => $flow['from'],
+                'toAsset' => $flow['to'],
+                'fromAmount' => round($amount, 8),
+            ], $requireQuoteId);
+    
+            if (! $quote) {
+                return null;
+            }
+    
+            if ($index === 0) {
+                $initial = (float) $quote['fromAmount'];
+            }
+    
+            $amount = (float) $quote['toAmount'];
+            if (! empty($quote['quoteId'])) {
+                $quoteIds[] = $quote['quoteId'];
+            }
+        }
+    
+        $final = $amount;
+        $profit = $final - $initial;
+    
+        return compact('direction', 'initial', 'final', 'profit') + ['quoteIds' => $quoteIds];
     }
 
     /**

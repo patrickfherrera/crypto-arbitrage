@@ -26,11 +26,11 @@ class ArbitrageController extends Controller
                 ->through(fn ($coinArbitrage) => [
                     'id' => $coinArbitrage->id,
                     'coin_one' => $coinArbitrage->coin_one,
-                    'coin_one_from_asset' => $coinArbitrage->coin_one_from_asset,
+                    'coin_one_price' => $coinArbitrage->coin_one_price,
                     'coin_two' => $coinArbitrage->coin_two,
-                    'coin_two_from_asset' => $coinArbitrage->coin_two_from_asset,
+                    'coin_two_price' => $coinArbitrage->coin_two_price,
                     'coin_three' => $coinArbitrage->coin_three,
-                    'coin_three_from_asset' => $coinArbitrage->coin_three_from_asset,
+                    'coin_three_price' => $coinArbitrage->coin_three_price,
                 ]),
         ]);
     }
