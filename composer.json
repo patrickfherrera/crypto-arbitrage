@@ -18,7 +18,8 @@
         "laravel/framework": "^12.0",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.9",
-        "league/glide-symfony": "^2.0"
+        "league/glide-symfony": "^2.0",
+        "textalk/websocket": "*"
     },
     "require-dev": {
         "laravel/sail": "^1.26",
