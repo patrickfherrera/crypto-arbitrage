@@ -114,6 +114,14 @@ Route::post('arbitrages', [ArbitrageController::class, 'store'])
     ->name('arbitrages.store')
     ->middleware('auth');
 
+Route::get('arbitrages/{arbitrage}/edit', [ArbitrageController::class, 'edit'])
+    ->name('arbitrages.edit')
+    ->middleware('auth');
+
+    Route::put('arbitrages/{arbitrage}', [ArbitrageController::class, 'update'])
+    ->name('arbitrages.update')
+    ->middleware('auth');
+    
 // Arbitrage Logs
 
 Route::get('arbitrage-logs', [ArbitrageLogsController::class, 'index'])

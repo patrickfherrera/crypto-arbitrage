@@ -6,7 +6,7 @@
       <search-filter v-model="form.search" class="mr-4 w-full max-w-md" @reset="reset">
         <label class="block text-gray-700">Profitable:</label>
         <select v-model="form.profitable" class="form-select mt-1 w-full">
-          <option :value="null" />
+          <option :value="null">All</option>
           <option value="PROFITABLE">Profitable</option>
           <option value="NOT_PROFITABLE">Non Profitable</option>
         </select>

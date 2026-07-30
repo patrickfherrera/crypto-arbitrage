@@ -62,34 +62,44 @@ class ArbitrageController extends Controller
         return Redirect::route('coins')->with('success', 'Coin Arbitrage created.');
     }
 
-    public function edit(Coin $coin): Response
+    public function edit(CoinArbitrage $arbitrage): Response
     {
-        return Inertia::render('Coins/Edit', [
-            'coin' => [
-                'id' => $coin->id,
-                'base_asset' => $coin->base_asset,
-                'quote_asset' => $coin->quote_asset,
-                'transfer_fee' => $coin->transfer_fee,
-                'enabled' => $coin->enabled,
-                'deleted_at' => $coin->deleted_at
+        return Inertia::render('Arbitrages/Edit', [
+            'coins' => Coin::all(),
+            'coinArbitrage' => [
+                'id' => $arbitrage->id,
+                'coin_one_id' => $arbitrage->coin_one_id,
+                'coin_one_price' => $arbitrage->coin_one_price,
+                'coin_two_id' => $arbitrage->coin_two_id,
+                'coin_two_price' => $arbitrage->coin_two_price,
+                'coin_three_id' => $arbitrage->coin_three_id,
+                'coin_three_price' => $arbitrage->coin_three_price,
+                'profit' => $arbitrage->profit,
+                'capital' => $arbitrage->capital,
+                'test_mode' => $arbitrage->test_mode,
+                'enabled' => $arbitrage->enabled,
             ],
         ]);
     }
 
-    public function update(Coin $coin): RedirectResponse
+    public function update(CoinArbitrage $arbitrage): RedirectResponse
     {
-        $data = Request::validate([
-            'base_asset'   => ['required'],
-            'quote_asset'  => ['required'],
-            'transfer_fee' => ['required', 'numeric'],
-            'enabled'      => ['boolean'],
-        ]);
-
-        $data['symbol'] = $data['base_asset'] . $data['quote_asset'];
-
-        $coin->update($data);
-
-        return Redirect::back()->with('success', 'Coin updated.');
+        $arbitrage->update(
+            Request::validate([
+                'coin_one_id' => ['required'],
+                'coin_one_price' => ['required'],
+                'coin_two_id' => ['required'],
+                'coin_two_price' => ['required'],
+                'coin_three_id' => ['required'],
+                'coin_three_price' => ['required'],
+                'profit' => ['required', 'numeric'],
+                'capital' => ['required', 'numeric'],
+                'test_mode' => ['required', 'boolean'],
+                'enabled' => ['required', 'boolean'],
+            ])
+        );
+    
+        return Redirect::route('arbitrages')->with('success', 'Arbitrage updated.');
     }
 
     public function destroy(Coin $coin): RedirectResponse
