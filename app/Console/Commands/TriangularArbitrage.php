@@ -90,7 +90,7 @@ class TriangularArbitrage extends Command
             return;
         }
 
-        $fee = 0.001; // 0.1% per trade
+        $fee = (float) config('binance.taker_fee');
 
         $startUSDT = $coinArbitrage->capital;
 
