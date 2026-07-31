@@ -86,48 +86,109 @@ class TriangularArbitrage extends Command
 
         if (! $prices) {
             $this->error('Failed to fetch Binance prices.');
-
             return;
         }
 
         $fee = (float) config('binance.taker_fee');
+        $startUSDT = (float) $coinArbitrage->capital;
 
-        $startUSDT = $coinArbitrage->capital;
+        $forwardLegs = [
+            ['symbol' => $coinArbitrage->coin_one->symbol, 'side' => $coinArbitrage->coin_one_price],
+            ['symbol' => $coinArbitrage->coin_two->symbol, 'side' => $coinArbitrage->coin_two_price],
+            ['symbol' => $coinArbitrage->coin_three->symbol, 'side' => $coinArbitrage->coin_three_price],
+        ];
 
-        $coinOnePrice = $prices[$coinArbitrage->coin_one->symbol][$coinArbitrage->coin_one_price];
-        $coinOneAmount = ($coinArbitrage->coin_one_price === 'askPrice')
-            ? ($startUSDT / $coinOnePrice) * (1 - $fee)
-            : ($startUSDT * $coinOnePrice) * (1 - $fee);
+        $reverseLegs = [
+            ['symbol' => $coinArbitrage->coin_three->symbol, 'side' => $this->flipSide($coinArbitrage->coin_three_price)],
+            ['symbol' => $coinArbitrage->coin_two->symbol, 'side' => $this->flipSide($coinArbitrage->coin_two_price)],
+            ['symbol' => $coinArbitrage->coin_one->symbol, 'side' => $this->flipSide($coinArbitrage->coin_one_price)],
+        ];
 
-        $coinTwoPrice = $prices[$coinArbitrage->coin_two->symbol][$coinArbitrage->coin_two_price];
-        $coinTwoAmount = ($coinArbitrage->coin_two_price === 'askPrice')
-            ? ($coinOneAmount / $coinTwoPrice) * (1 - $fee)
-            : ($coinOneAmount * $coinTwoPrice) * (1 - $fee);
+        $forward = $this->simulatePath($forwardLegs, $prices, $startUSDT, $fee, 'forward');
+        $reverse = $this->simulatePath($reverseLegs, $prices, $startUSDT, $fee, 'reverse');
 
-        $coinThreePrice = $prices[$coinArbitrage->coin_three->symbol][$coinArbitrage->coin_three_price];
-        $finalUSDT = ($coinArbitrage->coin_three_price === 'askPrice')
-            ? ($coinTwoAmount / $coinThreePrice) * (1 - $fee)
-            : ($coinTwoAmount * $coinThreePrice) * (1 - $fee);
+        $best = collect([$forward, $reverse])->sortByDesc('profit')->first();
 
-        $profit = $finalUSDT - $startUSDT;
-        $status = $profit > 0 ? 'PROFITABLE' : 'NOT_PROFITABLE';
+        $quoteAgeMs = $this->maxQuoteAgeMs($prices);
 
         ArbitrageLog::create([
             'capital' => $startUSDT,
-            'final_amount' => $finalUSDT,
-            'profit' => $profit,
-            'status' => $status,
+            'final_amount' => $best['final'],
+            'profit' => $best['profit'],
+            'profit_pct' => $best['profit_pct'],
+            'status' => $best['profit'] > 0 ? 'PROFITABLE' : 'NOT_PROFITABLE',
+            'direction' => $best['direction'],
+            'quote_age_ms' => $quoteAgeMs,
             'coin_arbitrage_id' => $coinArbitrage->id,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
 
-        if ($profit > 0 && $coinArbitrage->test_mode == 0) {
-            $this->info("✅ PROFIT: Start \${$startUSDT}, End \${$finalUSDT}, Profit = \${$profit}");
-            $this->setParams($coinArbitrage);
+        $pct = number_format($best['profit_pct'], 4);
+
+        if ($best['profit'] > 0 && (int) $coinArbitrage->test_mode === 0) {
+
+            $this->info("✅ PROFIT {$best['direction']} {$pct}% age={$quoteAgeMs}ms");
+
+            // NOTE: setParams() still uses DB forward sides — only safe if forward wins.
+            // Don't live-trade reverse until setParams is direction-aware.
+            if ($best['direction'] === 'forward') {
+                $this->setParams($coinArbitrage);
+            } else {
+                $this->warn('Best was reverse; skipping live orders until setParams supports reverse.');
+            }
+
         } else {
-            $this->warn("❌ LOSS: Start \${$startUSDT}, End \${$finalUSDT}, Profit = \${$profit}");
+            $this->warn("❌ {$best['direction']} {$pct}% profit={$best['profit']} age={$quoteAgeMs}ms");
         }
+
+    }
+
+    protected function flipSide(string $priceSide): string
+    {
+        return $priceSide === 'askPrice' ? 'bidPrice' : 'askPrice';
+    }
+
+
+    protected function simulatePath(array $legs, array $prices, float $startUSDT, float $fee, string $direction): array
+    {
+        $amount = $startUSDT;
+
+        foreach ($legs as $leg) {
+
+            $price = $prices[$leg['symbol']][$leg['side']];
+
+            $amount = ($leg['side'] === 'askPrice')
+                ? ($amount / $price) * (1 - $fee)
+                : ($amount * $price) * (1 - $fee);
+        }
+
+        $profit = $amount - $startUSDT;
+
+        return [
+            'direction' => $direction,
+            'final' => $amount,
+            'profit' => $profit,
+            'profit_pct' => $startUSDT > 0 ? ($profit / $startUSDT) * 100 : 0,
+        ];
+
+    }
+
+    protected function maxQuoteAgeMs(array $prices): int
+    {
+        $nowMs = (int) (microtime(true) * 1000);
+        $max = 0;
+
+        foreach ($prices as $row) {
+
+            $ts = (int) ($row['ts'] ?? 0);
+
+            if ($ts > 0) {
+                $max = max($max, $nowMs - $ts);
+            }
+        }
+        
+        return $max;
     }
 
     /**

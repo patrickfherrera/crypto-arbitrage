@@ -23,6 +23,9 @@
           <th class="pb-4 pt-6 px-6">Profit</th>
           <th class="pb-4 pt-6 px-6">Final Amount</th>
           <th class="pb-4 pt-6 px-6">Status</th>
+          <th class="pb-4 pt-6 px-6">Profit %</th>
+          <th class="pb-4 pt-6 px-6">Direction</th>
+          <th class="pb-4 pt-6 px-6">Quote Age (ms)</th>
         </tr>
         <tr v-for="arbitrageLog in formattedLogs" :key="arbitrageLog.id" class="hover:bg-gray-100 focus-within:bg-gray-100">
           <td class="border-t">
@@ -65,9 +68,18 @@
               {{ arbitrageLog.status }}
             </div>
           </td>
+          <td class="border-t">
+            <div class="flex items-center px-6 py-4">{{ arbitrageLog.profit_pct }}</div>
+          </td>
+          <td class="border-t">
+            <div class="flex items-center px-6 py-4">{{ arbitrageLog.direction }}</div>
+          </td>
+          <td class="border-t">
+            <div class="flex items-center px-6 py-4">{{ arbitrageLog.quote_age_ms }}</div>
+          </td>
         </tr>
         <tr v-if="arbitrageLogs.data.length === 0">
-          <td class="px-6 py-4 border-t" colspan="4">No arbitrage logs found.</td>
+          <td class="px-6 py-4 border-t" colspan="11">No arbitrage logs found.</td>
         </tr>
       </table>
     </div>

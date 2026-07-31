@@ -30,9 +30,12 @@ class ArbitrageLogsController extends Controller
                     'coin_two_name' => $arbitrageLog->coin_arbitrage->coin_two->symbol,
                     'coin_three_name' => $arbitrageLog->coin_arbitrage->coin_three->symbol,
                     'capital' => number_format($arbitrageLog->capital, 2),
-                    'profit' => number_format($arbitrageLog->profit, 2),
-                    'final_amount' => number_format($arbitrageLog->final_amount, 2),
+                    'profit' => number_format($arbitrageLog->profit, 6),
+                    'final_amount' => number_format($arbitrageLog->final_amount, 6),
                     'status' => str_replace('_', ' ', $arbitrageLog->status),
+                    'profit_pct' => number_format((float) $arbitrageLog->profit_pct, 4),
+                    'direction' => $arbitrageLog->direction,
+                    'quote_age_ms' => $arbitrageLog->quote_age_ms,
                 ]),
         ]);
     }
