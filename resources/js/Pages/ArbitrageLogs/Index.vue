@@ -9,7 +9,7 @@
       <span :class="profitPctClass(summary.best_pct)">{{ formatProfitPct(summary.best_pct) }}</span>
       · mean
       <span :class="profitPctClass(summary.mean_pct)">{{ formatProfitPct(summary.mean_pct) }}</span>
-      <span class="text-gray-400"> · auto-refresh 15s</span>
+      <span class="text-gray-400"> · refresh in {{ refreshIn }}s</span>
     </p>
 
     <div class="flex items-center justify-between mb-6">
@@ -124,6 +124,8 @@ export default {
   },
   data() {
     return {
+      refreshIntervalMs: 15000,
+      refreshIn: 15,
       refreshTimer: null,
       form: {
         search: this.filters.search,
@@ -151,13 +153,18 @@ export default {
     },
   },
   mounted() {
+    this.refreshIn = this.refreshIntervalMs / 1000
     this.refreshTimer = setInterval(() => {
-      this.$inertia.reload({
-        only: ['arbitrageLogs', 'summary'],
-        preserveState: true,
-        preserveScroll: true,
-      })
-    }, 15000)
+      this.refreshIn -= 1
+      if (this.refreshIn <= 0) {
+        this.refreshIn = this.refreshIntervalMs / 1000
+        this.$inertia.reload({
+          only: ['arbitrageLogs', 'summary'],
+          preserveState: true,
+          preserveScroll: true,
+        })
+      }
+    }, 1000)
   },
   beforeUnmount() {
     if (this.refreshTimer) clearInterval(this.refreshTimer)
