@@ -3,12 +3,33 @@
     <Head title="Arbitrage Logs" />
     <h1 class="mb-8 text-3xl font-bold">Arbitrage Logs</h1>
     <div class="flex items-center justify-between mb-6">
-      <search-filter v-model="form.search" class="mr-4 w-full max-w-md" @reset="reset">
+      <search-filter v-model="form.search" class="mr-4 w-full max-w-md" :max-width="360" @reset="reset">
         <label class="block text-gray-700">Profitable:</label>
         <select v-model="form.profitable" class="form-select mt-1 w-full">
           <option :value="null">All</option>
           <option value="PROFITABLE">Profitable</option>
           <option value="NOT_PROFITABLE">Non Profitable</option>
+        </select>
+
+        <label class="block text-gray-700 mt-4">Direction:</label>
+        <select v-model="form.direction" class="form-select mt-1 w-full">
+          <option :value="null">All</option>
+          <option value="forward">Forward</option>
+          <option value="reverse">Reverse</option>
+        </select>
+
+        <label class="block text-gray-700 mt-4">Path:</label>
+        <select v-model="form.coin_arbitrage_id" class="form-select mt-1 w-full">
+          <option :value="null">All</option>
+          <option v-for="arb in arbitrages" :key="arb.id" :value="String(arb.id)">
+            {{ arb.label }}
+          </option>
+        </select>
+
+        <label class="block text-gray-700 mt-4">Sort:</label>
+        <select v-model="form.sort" class="form-select mt-1 w-full">
+          <option value="newest">Newest</option>
+          <option value="best_pct">Best profit %</option>
         </select>
       </search-filter>
     </div>
@@ -16,70 +37,55 @@
       <table class="w-full whitespace-nowrap">
         <tr class="text-left font-bold">
           <th class="pb-4 pt-6 px-6">Date</th>
-          <th class="pb-4 pt-6 px-6">Coin One</th>
-          <th class="pb-4 pt-6 px-6">Coin Two</th>
-          <th class="pb-4 pt-6 px-6">Coin Three</th>
+          <th class="pb-4 pt-6 px-6">Path</th>
           <th class="pb-4 pt-6 px-6">Capital</th>
           <th class="pb-4 pt-6 px-6">Profit</th>
-          <th class="pb-4 pt-6 px-6">Final Amount</th>
-          <th class="pb-4 pt-6 px-6">Status</th>
           <th class="pb-4 pt-6 px-6">Profit %</th>
           <th class="pb-4 pt-6 px-6">Direction</th>
           <th class="pb-4 pt-6 px-6">Quote Age (ms)</th>
+          <th class="pb-4 pt-6 px-6">Status</th>
         </tr>
-        <tr v-for="arbitrageLog in formattedLogs" :key="arbitrageLog.id" class="hover:bg-gray-100 focus-within:bg-gray-100">
+        <tr
+          v-for="arbitrageLog in formattedLogs"
+          :key="arbitrageLog.id"
+          class="hover:bg-gray-100 focus-within:bg-gray-100"
+        >
           <td class="border-t">
-            <div class="flex items-center px-6 py-4 focus:text-indigo-500">
-              {{ arbitrageLog.created_at }}
+            <div class="flex items-center px-6 py-4">{{ arbitrageLog.created_at }}</div>
+          </td>
+          <td class="border-t">
+            <div class="flex items-center px-6 py-4">{{ arbitrageLog.path }}</div>
+          </td>
+          <td class="border-t">
+            <div class="flex items-center px-6 py-4">{{ arbitrageLog.capital }}</div>
+          </td>
+          <td class="border-t">
+            <div class="flex items-center px-6 py-4">{{ arbitrageLog.profit }}</div>
+          </td>
+          <td class="border-t">
+            <div
+              class="flex items-center px-6 py-4"
+              :class="profitPctClass(arbitrageLog.profit_pct)"
+            >
+              {{ formatProfitPct(arbitrageLog.profit_pct) }}
             </div>
           </td>
           <td class="border-t">
-            <div class="flex items-center px-6 py-4 focus:text-indigo-500">
-              {{ arbitrageLog.coin_one_name }}
+            <div class="flex items-center px-6 py-4">
+              {{ arbitrageLog.direction || '—' }}
             </div>
           </td>
           <td class="border-t">
-            <div class="flex items-center px-6 py-4 focus:text-indigo-500">
-              {{ arbitrageLog.coin_two_name }}
+            <div class="flex items-center px-6 py-4">
+              {{ arbitrageLog.quote_age_ms ?? '—' }}
             </div>
           </td>
           <td class="border-t">
-            <div class="flex items-center px-6 py-4 focus:text-indigo-500">
-              {{ arbitrageLog.coin_three_name }}
-            </div>
-          </td>
-          <td class="border-t">
-            <div class="flex items-center px-6 py-4 focus:text-indigo-500">
-              {{ arbitrageLog.capital }}
-            </div>
-          </td>
-          <td class="border-t">
-            <div class="flex items-center px-6 py-4 focus:text-indigo-500">
-              {{ arbitrageLog.profit }}
-            </div>
-          </td>
-          <td class="border-t">
-            <div class="flex items-center px-6 py-4 focus:text-indigo-500">
-              {{ arbitrageLog.final_amount }}
-            </div>
-          </td>
-          <td class="border-t">
-            <div class="flex items-center px-6 py-4 focus:text-indigo-500">
-              {{ arbitrageLog.status }}
-            </div>
-          </td>
-          <td class="border-t">
-            <div class="flex items-center px-6 py-4">{{ arbitrageLog.profit_pct }}</div>
-          </td>
-          <td class="border-t">
-            <div class="flex items-center px-6 py-4">{{ arbitrageLog.direction }}</div>
-          </td>
-          <td class="border-t">
-            <div class="flex items-center px-6 py-4">{{ arbitrageLog.quote_age_ms }}</div>
+            <div class="flex items-center px-6 py-4">{{ arbitrageLog.status }}</div>
           </td>
         </tr>
         <tr v-if="arbitrageLogs.data.length === 0">
-          <td class="px-6 py-4 border-t" colspan="11">No arbitrage logs found.</td>
+          <td class="px-6 py-4 border-t" colspan="8">No arbitrage logs found.</td>
         </tr>
       </table>
     </div>
@@ -109,6 +115,7 @@ export default {
   layout: Layout,
   props: {
     filters: Object,
+    arbitrages: Array,
     arbitrageLogs: Object,
   },
   data() {
@@ -116,6 +123,9 @@ export default {
       form: {
         search: this.filters.search,
         profitable: this.filters.profitable,
+        direction: this.filters.direction,
+        coin_arbitrage_id: this.filters.coin_arbitrage_id,
+        sort: this.filters.sort || 'newest',
       },
     }
   },
@@ -123,9 +133,9 @@ export default {
     formattedLogs() {
       return this.arbitrageLogs.data.map(arbitrageLog => ({
         ...arbitrageLog,
-        created_at: DateTime.fromISO(arbitrageLog.created_at).toLocal().toFormat('MM/dd/yyyy h:mma')
+        created_at: DateTime.fromISO(arbitrageLog.created_at).toLocal().toFormat('MM/dd/yyyy h:mma'),
       }))
-    }
+    },
   },
   watch: {
     form: {
@@ -137,7 +147,23 @@ export default {
   },
   methods: {
     reset() {
-      this.form = mapValues(this.form, () => null)
+      this.form = {
+        search: null,
+        profitable: null,
+        direction: null,
+        coin_arbitrage_id: null,
+        sort: 'newest',
+      }
+    },
+    formatProfitPct(value) {
+      if (value === null || value === undefined) return '—'
+      return `${Number(value).toFixed(4)}%`
+    },
+    profitPctClass(value) {
+      if (value === null || value === undefined) return 'text-gray-400'
+      if (value > 0) return 'text-green-600'
+      if (value < 0) return 'text-red-600'
+      return 'text-gray-700'
     },
   },
 }
