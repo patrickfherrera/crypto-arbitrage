@@ -2,8 +2,8 @@
   <div>
     <Head :title="symbol" />
     <h1 class="mb-8 text-3xl font-bold">
-      <Link class="text-indigo-400 hover:text-indigo-600" href="/coins">Coins</Link>
-      <span class="text-indigo-400 font-medium">/</span>
+      <Link class="text-slate-400 hover:text-slate-700" href="/coins">Coins</Link>
+      <span class="text-slate-400 font-medium">/</span>
       {{ symbol }}
     </h1>
     <trashed-message v-if="coin.deleted_at" class="mb-6" @restore="restore"> This coin has been deleted. </trashed-message>
@@ -20,7 +20,7 @@
         </div>
         <div class="flex items-center px-8 py-4 bg-gray-50 border-t border-gray-100">
           <button v-if="!coin.deleted_at" class="text-red-600 hover:underline" tabindex="-1" type="button" @click="destroy">Delete Coin</button>
-          <loading-button :loading="form.processing" class="btn-indigo ml-auto" type="submit">Update Coin</loading-button>
+          <loading-button :loading="form.processing" class="btn-primary ml-auto" type="submit">Update Coin</loading-button>
         </div>
       </form>
     </div>

@@ -2,8 +2,8 @@
   <div>
     <Head title="Create Coins" />
     <h1 class="mb-8 text-3xl font-bold">
-      <Link class="text-indigo-400 hover:text-indigo-600" href="/coins">Arbitrage</Link>
-      <span class="text-indigo-400 font-medium">/</span> Create
+      <Link class="text-slate-400 hover:text-slate-700" href="/arbitrages">Arbitrage</Link>
+      <span class="text-slate-400 font-medium">/</span> Create
     </h1>
     <div class="max-w-3xl bg-white rounded-md shadow overflow-hidden">
       <form @submit.prevent="store">
@@ -61,7 +61,7 @@
           </select-input>
         </div>
         <div class="flex items-center justify-end px-8 py-4 bg-gray-50 border-t border-gray-100">
-          <loading-button :loading="form.processing" class="btn-indigo" type="submit">Create Arbitrage</loading-button>
+          <loading-button :loading="form.processing" class="btn-primary" type="submit">Create Arbitrage</loading-button>
         </div>
       </form>
     </div>

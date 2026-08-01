@@ -3,8 +3,8 @@
     <Head :title="`${form.first_name} ${form.last_name}`" />
     <div class="flex justify-start mb-8 max-w-3xl">
       <h1 class="text-3xl font-bold">
-        <Link class="text-indigo-400 hover:text-indigo-600" href="/users">Users</Link>
-        <span class="text-indigo-400 font-medium">/</span>
+        <Link class="text-slate-400 hover:text-slate-700" href="/users">Users</Link>
+        <span class="text-slate-400 font-medium">/</span>
         {{ form.first_name }} {{ form.last_name }}
       </h1>
       <img v-if="user.photo" class="block ml-4 w-8 h-8 rounded-full" :src="user.photo" />
@@ -25,7 +25,7 @@
         </div>
         <div class="flex items-center px-8 py-4 bg-gray-50 border-t border-gray-100">
           <button v-if="!user.deleted_at" class="text-red-600 hover:underline" tabindex="-1" type="button" @click="destroy">Delete User</button>
-          <loading-button :loading="form.processing" class="btn-indigo ml-auto" type="submit">Update User</loading-button>
+          <loading-button :loading="form.processing" class="btn-primary ml-auto" type="submit">Update User</loading-button>
         </div>
       </form>
     </div>

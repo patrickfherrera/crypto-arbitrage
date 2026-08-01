@@ -6,7 +6,6 @@ use App\Http\Controllers\ImagesController;
 use App\Http\Controllers\CoinsController;
 use App\Http\Controllers\ArbitrageController;
 use App\Http\Controllers\ArbitrageLogsController;
-use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\UsersController;
 use Illuminate\Support\Facades\Route;
 
@@ -126,12 +125,6 @@ Route::get('arbitrages/{arbitrage}/edit', [ArbitrageController::class, 'edit'])
 
 Route::get('arbitrage-logs', [ArbitrageLogsController::class, 'index'])
     ->name('arbitrage-logs.index')
-    ->middleware('auth');
-
-// Reports
-
-Route::get('reports', [ReportsController::class, 'index'])
-    ->name('reports')
     ->middleware('auth');
 
 // Images

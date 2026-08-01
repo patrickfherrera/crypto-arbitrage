@@ -11,7 +11,7 @@
           <option value="only">Only Trashed</option>
         </select>
       </search-filter>
-      <Link class="btn-indigo" href="/coins/create">
+      <Link class="btn-primary" href="/coins/create">
         <span>Create</span>
         <span class="hidden md:inline">&nbsp;Coins</span>
       </Link>
