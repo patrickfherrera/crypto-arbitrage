@@ -2,6 +2,16 @@
   <div>
     <Head title="Arbitrage Logs" />
     <h1 class="mb-8 text-3xl font-bold">Arbitrage Logs</h1>
+
+    <p class="mb-4 text-sm text-gray-600">
+      {{ summary.total }} rows
+      · best
+      <span :class="profitPctClass(summary.best_pct)">{{ formatProfitPct(summary.best_pct) }}</span>
+      · mean
+      <span :class="profitPctClass(summary.mean_pct)">{{ formatProfitPct(summary.mean_pct) }}</span>
+      <span class="text-gray-400"> · auto-refresh 15s</span>
+    </p>
+
     <div class="flex items-center justify-between mb-6">
       <search-filter v-model="form.search" class="mr-4 w-full max-w-md" :max-width="360" @reset="reset">
         <label class="block text-gray-700">Profitable:</label>
@@ -33,6 +43,7 @@
         </select>
       </search-filter>
     </div>
+
     <div class="bg-white rounded-md shadow overflow-x-auto">
       <table class="w-full whitespace-nowrap">
         <tr class="text-left font-bold">
@@ -63,22 +74,15 @@
             <div class="flex items-center px-6 py-4">{{ arbitrageLog.profit }}</div>
           </td>
           <td class="border-t">
-            <div
-              class="flex items-center px-6 py-4"
-              :class="profitPctClass(arbitrageLog.profit_pct)"
-            >
+            <div class="flex items-center px-6 py-4" :class="profitPctClass(arbitrageLog.profit_pct)">
               {{ formatProfitPct(arbitrageLog.profit_pct) }}
             </div>
           </td>
           <td class="border-t">
-            <div class="flex items-center px-6 py-4">
-              {{ arbitrageLog.direction || '—' }}
-            </div>
+            <div class="flex items-center px-6 py-4">{{ arbitrageLog.direction || '—' }}</div>
           </td>
           <td class="border-t">
-            <div class="flex items-center px-6 py-4">
-              {{ arbitrageLog.quote_age_ms ?? '—' }}
-            </div>
+            <div class="flex items-center px-6 py-4">{{ arbitrageLog.quote_age_ms ?? '—' }}</div>
           </td>
           <td class="border-t">
             <div class="flex items-center px-6 py-4">{{ arbitrageLog.status }}</div>
@@ -100,7 +104,6 @@ import Icon from '@/Shared/Icon.vue'
 import pickBy from 'lodash/pickBy'
 import Layout from '@/Shared/Layout.vue'
 import throttle from 'lodash/throttle'
-import mapValues from 'lodash/mapValues'
 import Pagination from '@/Shared/Pagination.vue'
 import SearchFilter from '@/Shared/SearchFilter.vue'
 
@@ -116,10 +119,12 @@ export default {
   props: {
     filters: Object,
     arbitrages: Array,
+    summary: Object,
     arbitrageLogs: Object,
   },
   data() {
     return {
+      refreshTimer: null,
       form: {
         search: this.filters.search,
         profitable: this.filters.profitable,
@@ -144,6 +149,18 @@ export default {
         this.$inertia.get('/arbitrage-logs', pickBy(this.form), { preserveState: true })
       }, 150),
     },
+  },
+  mounted() {
+    this.refreshTimer = setInterval(() => {
+      this.$inertia.reload({
+        only: ['arbitrageLogs', 'summary'],
+        preserveState: true,
+        preserveScroll: true,
+      })
+    }, 15000)
+  },
+  beforeUnmount() {
+    if (this.refreshTimer) clearInterval(this.refreshTimer)
   },
   methods: {
     reset() {

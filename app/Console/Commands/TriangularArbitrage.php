@@ -110,6 +110,13 @@ class TriangularArbitrage extends Command
         $best = collect([$forward, $reverse])->sortByDesc('profit')->first();
 
         $quoteAgeMs = $this->maxQuoteAgeMs($prices);
+        $pct = number_format($best['profit_pct'], 4);
+        $minLogPct = (float) config('binance.log_min_profit_pct', -0.05);
+
+        if ($best['profit_pct'] <= $minLogPct) {
+            $this->warn("skip {$best['direction']} {$pct}% (below {$minLogPct}%) age={$quoteAgeMs}ms");
+            return;
+        }
 
         ArbitrageLog::create([
             'capital' => $startUSDT,
@@ -124,20 +131,13 @@ class TriangularArbitrage extends Command
             'updated_at' => now(),
         ]);
 
-        $pct = number_format($best['profit_pct'], 4);
-
         if ($best['profit'] > 0 && (int) $coinArbitrage->test_mode === 0) {
-
             $this->info("✅ PROFIT {$best['direction']} {$pct}% age={$quoteAgeMs}ms");
-
-            // NOTE: setParams() still uses DB forward sides — only safe if forward wins.
-            // Don't live-trade reverse until setParams is direction-aware.
             if ($best['direction'] === 'forward') {
                 $this->setParams($coinArbitrage);
             } else {
                 $this->warn('Best was reverse; skipping live orders until setParams supports reverse.');
             }
-
         } else {
             $this->warn("❌ {$best['direction']} {$pct}% profit={$best['profit']} age={$quoteAgeMs}ms");
         }

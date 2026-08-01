@@ -8,4 +8,5 @@ return [
     'send_quote_convert_url' => env('BINANCE_API_SEND_QUOTE_CONVERT_URL', '/sapi/v1/convert/getQuote?'),
     'accept_quote_convert_url' => env('BINANCE_API_ACCEPT_QUOTE_CONVERT_URL', '/sapi/v1/convert/acceptQuote?'),
     'taker_fee' => (float) env('BINANCE_TAKER_FEE', 0.001),
+    'log_min_profit_pct' => (float) env('BINANCE_LOG_MIN_PROFIT_PCT', -0.05)
 ];
