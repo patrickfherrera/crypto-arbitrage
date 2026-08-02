@@ -89,7 +89,8 @@ class TriangularArbitrage extends Command
             return;
         }
 
-        $fee = (float) config('binance.taker_fee');
+        $fee = 0.0;
+        //$fee = (float) config('binance.taker_fee');
         $startUSDT = (float) $coinArbitrage->capital;
 
         $forwardLegs = [
@@ -108,6 +109,13 @@ class TriangularArbitrage extends Command
         $reverse = $this->simulatePath($reverseLegs, $prices, $startUSDT, $fee, 'reverse');
 
         $best = collect([$forward, $reverse])->sortByDesc('profit')->first();
+
+        $this->info(sprintf(
+            'gross=%s%% dir=%s',
+            number_format($best['profit_pct'], 4),
+            $best['direction']
+        ));
+        
 
         $quoteAgeMs = $this->maxQuoteAgeMs($prices);
         $pct = number_format($best['profit_pct'], 4);
