@@ -7,6 +7,7 @@ use App\Models\CoinArbitrage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\Facades\Request;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -59,6 +60,8 @@ class ArbitrageController extends Controller
             ])
         );
 
+        Cache::put('binance.feed.reload', true);
+
         return Redirect::route('coins')->with('success', 'Coin Arbitrage created.');
     }
 
@@ -99,6 +102,8 @@ class ArbitrageController extends Controller
             ])
         );
     
+        Cache::put('binance.feed.reload', true);
+
         return Redirect::route('arbitrages')->with('success', 'Arbitrage updated.');
     }
 

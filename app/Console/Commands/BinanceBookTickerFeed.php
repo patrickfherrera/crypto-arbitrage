@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\CoinArbitrage;
 use App\Services\Binance\BookTickerStore;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 use WebSocket\Client;
 use WebSocket\ConnectionException;
 
@@ -18,19 +19,23 @@ class BinanceBookTickerFeed extends Command
 
     public function handle(BookTickerStore $store): int
     {
-        $symbols = $this->resolveSymbols();
-        if ($symbols === []) {
-            $this->error('No symbols to subscribe.');
-
-            return self::FAILURE;
-        }
-
-        $this->info('Subscribing: '.implode(', ', $symbols));
-
         while (true) {
+            $symbols = $this->resolveSymbols();
+            if ($symbols === []) {
+                $this->warn('No enabled symbols; retrying in 5s...');
+                sleep(5);
+                continue;
+            }
+
+            $this->info('Subscribing: '.implode(', ', $symbols));
+
             try {
                 $this->runStream($symbols, $store);
             } catch (\Throwable $e) {
+                if ($e->getMessage() === 'reload') {
+                    $this->info('Reload requested; resubscribing...');
+                    continue;
+                }
                 $this->error('WS error: '.$e->getMessage());
                 $this->warn('Reconnecting in 3s...');
                 sleep(3);
@@ -51,12 +56,17 @@ class BinanceBookTickerFeed extends Command
         $url = rtrim($this->option('base-url'), '/').'/stream?streams='.$streams;
 
         $client = new Client($url, [
-            'timeout' => 60, // seconds; Binance sends frequently
+            'timeout' => 60,
         ]);
 
         $this->info('Connected: '.$url);
 
         while (true) {
+            if (Cache::pull('binance.feed.reload')) {
+                $client->close();
+                throw new \RuntimeException('reload');
+            }
+
             try {
                 $raw = $client->receive();
             } catch (ConnectionException $e) {
@@ -73,7 +83,6 @@ class BinanceBookTickerFeed extends Command
                 continue;
             }
 
-            // Combined stream: { stream, data: { s, b, a, ... } }
             $data = $payload['data'] ?? $payload;
             if (! isset($data['s'], $data['b'], $data['a'])) {
                 continue;
