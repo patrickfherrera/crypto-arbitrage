@@ -11,10 +11,11 @@ use Illuminate\Console\Command;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use App\Services\Binance\BookTickerStore;
+use App\Services\Binance\FeeResolver;
 
 class TriangularArbitrage extends Command
 {
-    protected $signature = 'arbitrage:run {--interval=5} {--coin_arbitrage_id=}';
+    protected $signature = 'arbitrage:run {--interval=1} {--coin_arbitrage_id=}';
 
     protected $description = 'Run triangular arbitrage simulation 24/7 and log results to DB';
 
@@ -52,72 +53,96 @@ class TriangularArbitrage extends Command
         return $this->exchangeInfoCache[$symbol];
     }
 
-    public function handle(): int
+    public function handle(FeeResolver $fees): int
     {
-        $interval = max(1, (int) $this->option('interval'));
+        $interval = max(0, (int) $this->option('interval'));
         $this->info('Starting triangular arbitrage bot');
-
+    
         $coin_arbitrage = CoinArbitrage::with(['coin_one', 'coin_two', 'coin_three'])
             ->find($this->option('coin_arbitrage_id'));
-
+    
         if (! $coin_arbitrage) {
             $this->error('coin_arbitrage_id not found or invalid.');
-
+    
             return self::FAILURE;
         }
-
+    
         $id = $coin_arbitrage->id;
-
+        $lastFp = null;
+        $fee = $fees->takerFee();
+        $this->info("Using taker fee={$fee}");
+    
         while (CoinArbitrage::query()->whereKey($id)->where('enabled', true)->exists()) {
-            $this->simulate($coin_arbitrage);
-            sleep($interval);
+            $coin_arbitrage->refresh();
+            $coin_arbitrage->load(['coin_one', 'coin_two', 'coin_three']);
+    
+            $prices = $this->fetchPrices([
+                $coin_arbitrage->coin_one->symbol,
+                $coin_arbitrage->coin_two->symbol,
+                $coin_arbitrage->coin_three->symbol,
+            ]);
+    
+            if (! $prices) {
+                usleep(max(50_000, $interval * 1_000_000));
+                continue;
+            }
+    
+            $fp = md5(json_encode([
+                $prices[$coin_arbitrage->coin_one->symbol]['bidPrice'] ?? null,
+                $prices[$coin_arbitrage->coin_one->symbol]['askPrice'] ?? null,
+                $prices[$coin_arbitrage->coin_two->symbol]['bidPrice'] ?? null,
+                $prices[$coin_arbitrage->coin_two->symbol]['askPrice'] ?? null,
+                $prices[$coin_arbitrage->coin_three->symbol]['bidPrice'] ?? null,
+                $prices[$coin_arbitrage->coin_three->symbol]['askPrice'] ?? null,
+            ]));
+    
+            if ($fp !== $lastFp) {
+                $lastFp = $fp;
+                $this->simulate($coin_arbitrage, $prices, $fee);
+            }
+    
+            usleep($interval > 0 ? $interval * 1_000_000 : 100_000);
         }
-
+    
         return self::SUCCESS;
     }
 
-    protected function simulate(CoinArbitrage $coinArbitrage): void
+    protected function simulate(CoinArbitrage $coinArbitrage, array $prices, float $fee): void
     {
-        $prices = $this->fetchPrices([
-            $coinArbitrage->coin_one->symbol,
-            $coinArbitrage->coin_two->symbol,
-            $coinArbitrage->coin_three->symbol,
-        ]);
-
-        if (! $prices) {
-            $this->error('Failed to fetch Binance prices.');
+        $startUSDT = (float) $coinArbitrage->capital;
+        $startUSDT = $this->clampCapitalToDepth($coinArbitrage, $prices, $startUSDT);
+    
+        if ($startUSDT <= 0) {
+            $this->warn('Depth too thin; skip');
             return;
         }
-
-        $fee = (float) config('binance.taker_fee');
-        $startUSDT = (float) $coinArbitrage->capital;
-
+    
         $forwardLegs = [
             ['symbol' => $coinArbitrage->coin_one->symbol, 'side' => $coinArbitrage->coin_one_price],
             ['symbol' => $coinArbitrage->coin_two->symbol, 'side' => $coinArbitrage->coin_two_price],
             ['symbol' => $coinArbitrage->coin_three->symbol, 'side' => $coinArbitrage->coin_three_price],
         ];
-
+    
         $reverseLegs = [
             ['symbol' => $coinArbitrage->coin_three->symbol, 'side' => $this->flipSide($coinArbitrage->coin_three_price)],
             ['symbol' => $coinArbitrage->coin_two->symbol, 'side' => $this->flipSide($coinArbitrage->coin_two_price)],
             ['symbol' => $coinArbitrage->coin_one->symbol, 'side' => $this->flipSide($coinArbitrage->coin_one_price)],
         ];
-
+    
         $forward = $this->simulatePath($forwardLegs, $prices, $startUSDT, $fee, 'forward');
         $reverse = $this->simulatePath($reverseLegs, $prices, $startUSDT, $fee, 'reverse');
-
-        $best = collect([$forward, $reverse])->sortByDesc('profit')->first();        
-
+    
+        $best = collect([$forward, $reverse])->sortByDesc('profit')->first();
+    
         $quoteAgeMs = $this->maxQuoteAgeMs($prices);
         $pct = number_format($best['profit_pct'], 4);
         $minLogPct = (float) config('binance.log_min_profit_pct', -0.05);
-
+    
         if ($best['profit_pct'] <= $minLogPct) {
             $this->warn("skip {$best['direction']} {$pct}% (below {$minLogPct}%) age={$quoteAgeMs}ms");
             return;
         }
-
+    
         ArbitrageLog::create([
             'capital' => $startUSDT,
             'final_amount' => $best['final'],
@@ -130,18 +155,22 @@ class TriangularArbitrage extends Command
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-
-        if ($best['profit'] > 0 && (int) $coinArbitrage->test_mode === 0) {
-            $this->info("✅ PROFIT {$best['direction']} {$pct}% age={$quoteAgeMs}ms");
+    
+        $minExecute = (float) config('binance.min_execute_profit_pct', 0.05);
+    
+        if (
+            $best['profit_pct'] >= $minExecute
+            && (int) $coinArbitrage->test_mode === 0
+        ) {
+            $this->info("✅ EXECUTE {$best['direction']} {$pct}% (min {$minExecute}%) age={$quoteAgeMs}ms");
             if ($best['direction'] === 'forward') {
-                $this->setParams($coinArbitrage);
+                $this->setParams($coinArbitrage, $startUSDT);
             } else {
                 $this->warn('Best was reverse; skipping live orders until setParams supports reverse.');
             }
         } else {
             $this->warn("❌ {$best['direction']} {$pct}% profit={$best['profit']} age={$quoteAgeMs}ms");
         }
-
     }
 
     protected function flipSide(string $priceSide): string
@@ -212,6 +241,40 @@ class TriangularArbitrage extends Command
         return round($capital, $precision);
     }
 
+    protected function clampCapitalToDepth(CoinArbitrage $arb, array $prices, float $capital): float
+    {
+        $fraction = max(0.01, min(1.0, (float) config('binance.depth_fill_fraction', 0.25)));
+        $maxByDepth = $capital;
+    
+        $legs = [
+            [$arb->coin_one, $arb->coin_one_price],
+            [$arb->coin_two, $arb->coin_two_price],
+            [$arb->coin_three, $arb->coin_three_price],
+        ];
+    
+        foreach ($legs as [$coin, $side]) {
+            // Only USDT-quoted books are ~USDT notional at top of book.
+            if (($coin->quote_asset ?? null) !== 'USDT') {
+                continue;
+            }
+    
+            $row = $prices[$coin->symbol] ?? null;
+            if (! $row) {
+                continue;
+            }
+    
+            $cap = $side === 'askPrice'
+                ? $row['askPrice'] * $row['askQty'] * $fraction
+                : $row['bidPrice'] * $row['bidQty'] * $fraction;
+    
+            if ($cap > 0) {
+                $maxByDepth = min($maxByDepth, $cap);
+            }
+        }
+    
+        return max(0.0, $maxByDepth);
+    }
+
     protected function fetchPrices(array $symbols): ?array
     {
         $symbols = array_values(array_unique(array_filter($symbols)));
@@ -246,27 +309,27 @@ class TriangularArbitrage extends Command
         }
     }
 
-    protected function setParams(CoinArbitrage $coin_arbitrage): void
+    protected function setParams(CoinArbitrage $coin_arbitrage, float $capitalUSDT): void
     {
         $trade = new Trade;
         $balances = $trade->freeBalancesMap();
-
+    
         $coinOneSide = ($coin_arbitrage->coin_one_price === 'askPrice') ? 'BUY' : 'SELL';
-        $coinOneTradeParams = $this->getTradeParams($coin_arbitrage->coin_one, $coinOneSide, $coin_arbitrage->capital, $balances);
+        $coinOneTradeParams = $this->getTradeParams($coin_arbitrage->coin_one, $coinOneSide, $capitalUSDT, $balances);
         $coinOneTradeResponse = $trade->newOrder($coinOneTradeParams);
-
+    
         $this->info($coinOneTradeResponse->getBody()->getContents());
-
+    
         $coinTwoSide = ($coin_arbitrage->coin_two_price === 'askPrice') ? 'BUY' : 'SELL';
         $coinTwoTradeParams = $this->getTradeParams($coin_arbitrage->coin_two, $coinTwoSide, null, $balances);
         $coinTwoTradeResponse = $trade->newOrder($coinTwoTradeParams);
-
+    
         $this->info($coinTwoTradeResponse->getBody()->getContents());
-
+    
         $coinThreeSide = ($coin_arbitrage->coin_three_price === 'askPrice') ? 'BUY' : 'SELL';
         $coinThreeTradeParams = $this->getTradeParams($coin_arbitrage->coin_three, $coinThreeSide, null, $balances);
         $coinThreeTradeResponse = $trade->newOrder($coinThreeTradeParams);
-
+    
         $this->info($coinThreeTradeResponse->getBody()->getContents());
     }
 

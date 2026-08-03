@@ -91,7 +91,9 @@ class BinanceBookTickerFeed extends Command
             $store->put(
                 (string) $data['s'],
                 (float) $data['b'],
-                (float) $data['a']
+                (float) $data['a'],
+                (float) ($data['B'] ?? 0),
+                (float) ($data['A'] ?? 0)
             );
         }
     }

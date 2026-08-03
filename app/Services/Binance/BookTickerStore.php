@@ -8,21 +8,28 @@ class BookTickerStore
 {
     public const KEY_PREFIX = 'binance:book:';
 
-    public function put(string $symbol, float $bid, float $ask): void
-    {
+    public function put(
+        string $symbol,
+        float $bid,
+        float $ask,
+        float $bidQty = 0.0,
+        float $askQty = 0.0
+    ): void {
         $symbol = strtoupper($symbol);
 
         Redis::set(self::KEY_PREFIX.$symbol, json_encode([
             'symbol' => $symbol,
             'bidPrice' => $bid,
             'askPrice' => $ask,
+            'bidQty' => $bidQty,
+            'askQty' => $askQty,
             'ts' => (int) (microtime(true) * 1000),
         ]));
     }
 
     /**
      * @param  list<string>  $symbols
-     * @return array<string, array{bidPrice: float, askPrice: float, ts?: int}>|null
+     * @return array<string, array{bidPrice: float, askPrice: float, bidQty: float, askQty: float, ts?: int}>|null
      */
     public function getMany(array $symbols): ?array
     {
@@ -44,6 +51,8 @@ class BookTickerStore
             $out[$symbol] = [
                 'bidPrice' => (float) $decoded['bidPrice'],
                 'askPrice' => (float) $decoded['askPrice'],
+                'bidQty' => (float) ($decoded['bidQty'] ?? 0),
+                'askQty' => (float) ($decoded['askQty'] ?? 0),
                 'ts' => (int) ($decoded['ts'] ?? 0),
             ];
         }
