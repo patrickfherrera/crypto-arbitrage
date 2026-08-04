@@ -12,6 +12,7 @@
       <span class="text-gray-400"> · refresh in {{ refreshIn }}s</span>
     </p>
 
+    <h2 class="mb-2 text-lg font-semibold">By triangle</h2>
     <div v-if="byTriangle.length" class="mb-6 bg-white rounded-md shadow overflow-x-auto">
       <table class="w-full whitespace-nowrap text-sm">
         <thead>
@@ -69,6 +70,7 @@
       </search-filter>
     </div>
 
+    <h2 class="mb-2 text-lg font-semibold">Recent logs</h2>
     <div class="bg-white rounded-md shadow overflow-x-auto">
       <table class="w-full whitespace-nowrap">
         <tr class="text-left font-bold">
