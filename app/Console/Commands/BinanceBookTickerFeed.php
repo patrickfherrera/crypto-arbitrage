@@ -12,22 +12,25 @@ use WebSocket\ConnectionException;
 class BinanceBookTickerFeed extends Command
 {
     protected $signature = 'binance:book-ticker-feed
-                            {--symbols= : Comma-separated symbols (default: enabled CoinArbitrage pairs)}
-                            {--base-url=wss://stream.binance.com:9443}';
+            {--symbols= : Comma-separated symbols (default: enabled CoinArbitrage pairs)}
+            {--all : Subscribe to all-market !bookTicker (for scanning)}
+            {--base-url=wss://stream.binance.com:9443}';
 
     protected $description = 'Stream Binance bookTicker into Redis';
 
     public function handle(BookTickerStore $store): int
     {
         while (true) {
-            $symbols = $this->resolveSymbols();
+            $symbols = $this->option('all') ? ['*'] : $this->resolveSymbols();
             if ($symbols === []) {
                 $this->warn('No enabled symbols; retrying in 5s...');
                 sleep(5);
                 continue;
             }
-
-            $this->info('Subscribing: '.implode(', ', $symbols));
+        
+            $this->info($this->option('all')
+                ? 'Subscribing: ALL !bookTicker'
+                : 'Subscribing: '.implode(', ', $symbols));
 
             try {
                 $this->runStream($symbols, $store);
@@ -48,13 +51,16 @@ class BinanceBookTickerFeed extends Command
      */
     protected function runStream(array $symbols, BookTickerStore $store): void
     {
-        $streams = implode('/', array_map(
-            fn (string $s) => strtolower($s).'@bookTicker',
-            $symbols
-        ));
-
-        $url = rtrim($this->option('base-url'), '/').'/stream?streams='.$streams;
-
+        if ($this->option('all')) {
+            $url = rtrim($this->option('base-url'), '/').'/ws/!bookTicker';
+        } else {
+            $streams = implode('/', array_map(
+                fn (string $s) => strtolower($s).'@bookTicker',
+                $symbols
+            ));
+            $url = rtrim($this->option('base-url'), '/').'/stream?streams='.$streams;
+        }
+        
         $client = new Client($url, [
             'timeout' => 60,
         ]);

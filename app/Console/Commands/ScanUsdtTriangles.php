@@ -50,6 +50,8 @@ class ScanUsdtTriangles extends Command
             ];
         }
 
+        $this->pairs = $pairs;
+        
         // quote-pairs: BASEQUOTE where quote = USDT → base asset
         $quoteBases = [];
         foreach ($pairs as $symbol => $p) {
