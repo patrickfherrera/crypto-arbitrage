@@ -26,6 +26,7 @@ class ArbitrageController extends Controller
                 ->withQueryString()
                 ->through(fn ($coinArbitrage) => [
                     'id' => $coinArbitrage->id,
+                    'enabled' => (bool) $coinArbitrage->enabled,
                     'coin_one' => $coinArbitrage->coin_one,
                     'coin_one_price' => $coinArbitrage->coin_one_price,
                     'coin_two' => $coinArbitrage->coin_two,

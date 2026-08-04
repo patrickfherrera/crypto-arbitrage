@@ -20,6 +20,7 @@
       <table class="w-full whitespace-nowrap">
         <thead>
         <tr class="text-left font-bold">
+          <th class="pb-4 pt-6 px-6">Enabled</th>
           <th class="pb-4 pt-6 px-6">Coin One</th>
           <th class="pb-4 pt-6 px-6"></th>
           <th class="pb-4 pt-6 px-6">Coin Two</th>
@@ -32,7 +33,17 @@
         <tr v-for="arbitrage in arbitrages.data" :key="arbitrage.id" class="hover:bg-gray-100 focus-within:bg-gray-100">
           <td class="border-t">
             <Link class="flex items-center px-6 py-4" :href="`/arbitrages/${arbitrage.id}/edit`" tabindex="-1">
-              {{ arbitrage.id }} {{ arbitrage.coin_one.symbol }}
+              <span
+                class="inline-block rounded px-2 py-0.5 text-xs font-medium"
+                :class="arbitrage.enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-600'"
+              >
+                {{ arbitrage.enabled ? 'On' : 'Off' }}
+              </span>
+            </Link>
+          </td>
+          <td class="border-t">
+            <Link class="flex items-center px-6 py-4" :href="`/arbitrages/${arbitrage.id}/edit`" tabindex="-1">
+              {{ arbitrage.coin_one.symbol }}
             </Link>
           </td>
           <td class="border-t">
