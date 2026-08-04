@@ -7,6 +7,7 @@ use App\Models\CoinArbitrage;
 use App\Services\Binance\FeeResolver;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Cache;
 
 class ScanUsdtTriangles extends Command
 {
@@ -14,7 +15,7 @@ class ScanUsdtTriangles extends Command
                             {--quote=USDT}
                             {--capital=100}
                             {--top=30}
-                            {--seed : Create disabled CoinArbitrage rows for top hits}
+                            {--seed : Create enabled CoinArbitrage rows for top hits (test_mode=1)}
                             {--min-profit=-1 : Min profit_pct to print}';
 
     protected $description = 'Enumerate quote triangles from exchangeInfo and score via REST bookTicker';
@@ -134,7 +135,8 @@ class ScanUsdtTriangles extends Command
             foreach (array_slice($top, 0, 10) as $row) {
                 $this->seedRow($row, $capital);
             }
-            $this->info('Seeded top rows as disabled CoinArbitrage (test_mode=1).');
+            Cache::put('binance.feed.reload', true);
+            $this->info('Seeded top rows (enabled=1, test_mode=1); feed reload requested.');
         }
 
         return self::SUCCESS;
@@ -248,7 +250,7 @@ class ScanUsdtTriangles extends Command
                 'profit' => 0,
                 'capital' => $capital,
                 'test_mode' => 1,
-                'enabled' => 0,
+                'enabled' => 1,
             ]
         );
     }
