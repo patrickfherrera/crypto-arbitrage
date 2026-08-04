@@ -4,7 +4,6 @@ namespace App\Console\Commands;
 
 use App\Models\Coin;
 use App\Models\CoinArbitrage;
-use App\Services\Binance\BookTickerStore;
 use App\Services\Binance\FeeResolver;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
@@ -18,12 +17,13 @@ class ScanUsdtTriangles extends Command
                             {--seed : Create disabled CoinArbitrage rows for top hits}
                             {--min-profit=-1 : Min profit_pct to print}';
 
-    protected $description = 'Enumerate quote triangles from exchangeInfo and score via Redis books';
+    protected $description = 'Enumerate quote triangles from exchangeInfo and score via REST bookTicker';
+
 
     /** @var array<string, array{base: string, quote: string}> */
     protected array $pairs = [];
 
-    public function handle(BookTickerStore $store, FeeResolver $fees): int
+    public function handle(FeeResolver $fees): int
     {
         $quote = strtoupper((string) $this->option('quote'));
         $capital = (float) $this->option('capital');
@@ -51,7 +51,7 @@ class ScanUsdtTriangles extends Command
         }
 
         $this->pairs = $pairs;
-        
+
         // quote-pairs: BASEQUOTE where quote = USDT → base asset
         $quoteBases = [];
         foreach ($pairs as $symbol => $p) {
@@ -86,13 +86,21 @@ class ScanUsdtTriangles extends Command
 
         $this->info('Triangles found: '.count($triangles));
 
+        $this->info('Fetching all bookTickers via REST…');
+        $allPrices = $this->fetchAllBookTickers();
+        $this->info('Book tickers loaded: '.count($allPrices));
+        
         $scored = [];
 
         foreach ($triangles as [$s1, $s2, $s3, $a, $b]) {
-            $prices = $store->getMany([$s1, $s2, $s3]);
-            if ($prices === null) {
+            if (! isset($allPrices[$s1], $allPrices[$s2], $allPrices[$s3])) {
                 continue;
             }
+            $prices = [
+                $s1 => $allPrices[$s1],
+                $s2 => $allPrices[$s2],
+                $s3 => $allPrices[$s3],
+            ];
 
             // Path forward: USDT→A (buy A), A→B on cross, B→USDT (sell B)
             $fwd = $this->scoreUsdtTriangle($prices, $s1, $s2, $s3, $a, $b, $capital, $fee, 'forward');
@@ -243,5 +251,30 @@ class ScanUsdtTriangles extends Command
                 'enabled' => 0,
             ]
         );
+    }
+
+    /**
+     * @return array<string, array{bidPrice: float, askPrice: float}>
+     */
+    protected function fetchAllBookTickers(): array
+    {
+        $response = Http::timeout(60)->get(rtrim(config('binance.api'), '/').'/api/v3/ticker/bookTicker');
+        if (! $response->successful()) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($response->json() ?? [] as $row) {
+            if (! isset($row['symbol'], $row['bidPrice'], $row['askPrice'])) {
+                continue;
+            }
+            $sym = strtoupper($row['symbol']);
+            $out[$sym] = [
+                'bidPrice' => (float) $row['bidPrice'],
+                'askPrice' => (float) $row['askPrice'],
+            ];
+        }
+
+        return $out;
     }
 }
