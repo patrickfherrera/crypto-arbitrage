@@ -52,7 +52,7 @@ class BinanceBookTickerFeed extends Command
     protected function runStream(array $symbols, BookTickerStore $store): void
     {
         if ($this->option('all')) {
-            $url = rtrim($this->option('base-url'), '/').'/ws/!bookTicker';
+            $url = rtrim($this->option('base-url'), '/').'/ws/%21bookTicker';
         } else {
             $streams = implode('/', array_map(
                 fn (string $s) => strtolower($s).'@bookTicker',
@@ -60,7 +60,7 @@ class BinanceBookTickerFeed extends Command
             ));
             $url = rtrim($this->option('base-url'), '/').'/stream?streams='.$streams;
         }
-        
+
         $client = new Client($url, [
             'timeout' => 60,
         ]);
