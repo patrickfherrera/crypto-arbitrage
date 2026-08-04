@@ -12,7 +12,7 @@
       <span class="text-gray-400"> · refresh in {{ refreshIn }}s</span>
     </p>
 
-    <h2 class="mb-2 text-lg font-semibold">By triangle</h2>
+    <h2 class="mb-2 text-lg font-semibold">By Triangle</h2>
     <div v-if="byTriangle.length" class="mb-6 bg-white rounded-md shadow overflow-x-auto">
       <table class="w-full whitespace-nowrap text-sm">
         <thead>
@@ -37,6 +37,8 @@
         </tbody>
       </table>
     </div>
+
+    <h2 class="mb-2 text-lg font-semibold">Recent logs</h2>
 
     <div class="flex items-center justify-between mb-6">
       <search-filter v-model="form.search" class="mr-4 w-full max-w-md" :max-width="360" @reset="reset">
@@ -70,7 +72,6 @@
       </search-filter>
     </div>
 
-    <h2 class="mb-2 text-lg font-semibold">Recent logs</h2>
     <div class="bg-white rounded-md shadow overflow-x-auto">
       <table class="w-full whitespace-nowrap">
         <tr class="text-left font-bold">
