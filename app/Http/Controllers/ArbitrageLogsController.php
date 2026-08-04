@@ -22,6 +22,30 @@ class ArbitrageLogsController extends Controller
             ->selectRaw('COUNT(*) as total, MAX(profit_pct) as best_pct, AVG(profit_pct) as mean_pct')
             ->first();
 
+        $labels = CoinArbitrage::with(['coin_one', 'coin_two', 'coin_three'])
+            ->get()
+            ->mapWithKeys(fn (CoinArbitrage $a) => [
+                $a->id => $a->coin_one->symbol.' → '.$a->coin_two->symbol.' → '.$a->coin_three->symbol,
+            ]);
+
+        $byTriangle = (clone $baseQuery)
+            ->whereNotNull('profit_pct')
+            ->selectRaw('coin_arbitrage_id, COUNT(*) as total, SUM(CASE WHEN profit_pct > 0 THEN 1 ELSE 0 END) as wins, MAX(profit_pct) as best_pct, AVG(profit_pct) as mean_pct')
+            ->groupBy('coin_arbitrage_id')
+            ->orderByDesc('wins')
+            ->orderByDesc('best_pct')
+            ->get()
+            ->map(fn ($row) => [
+                'coin_arbitrage_id' => (int) $row->coin_arbitrage_id,
+                'path' => $labels[$row->coin_arbitrage_id] ?? ('#'.$row->coin_arbitrage_id),
+                'total' => (int) $row->total,
+                'wins' => (int) $row->wins,
+                'win_rate' => $row->total > 0 ? ((int) $row->wins / (int) $row->total) * 100 : 0,
+                'best_pct' => $row->best_pct !== null ? (float) $row->best_pct : null,
+                'mean_pct' => $row->mean_pct !== null ? (float) $row->mean_pct : null,
+            ])
+            ->values();
+
         return Inertia::render('ArbitrageLogs/Index', [
             'filters' => Request::all('search', 'profitable', 'direction', 'coin_arbitrage_id', 'sort'),
             'arbitrages' => CoinArbitrage::with(['coin_one', 'coin_two', 'coin_three'])
@@ -31,12 +55,13 @@ class ArbitrageLogsController extends Controller
                     'id' => $a->id,
                     'label' => $a->coin_one->symbol.' → '.$a->coin_two->symbol.' → '.$a->coin_three->symbol,
                 ]),
-            'summary' => [
-                'total' => (int) ($summaryRow->total ?? 0),
-                'best_pct' => $summaryRow->best_pct !== null ? (float) $summaryRow->best_pct : null,
-                'mean_pct' => $summaryRow->mean_pct !== null ? (float) $summaryRow->mean_pct : null,
-            ],
-            'arbitrageLogs' => $baseQuery
+                'summary' => [
+                    'total' => (int) ($summaryRow->total ?? 0),
+                    'best_pct' => $summaryRow->best_pct !== null ? (float) $summaryRow->best_pct : null,
+                    'mean_pct' => $summaryRow->mean_pct !== null ? (float) $summaryRow->mean_pct : null,
+                ],
+                'byTriangle' => $byTriangle,
+                'arbitrageLogs' => $baseQuery
                 ->with([
                     'coin_arbitrage',
                     'coin_arbitrage.coin_one',

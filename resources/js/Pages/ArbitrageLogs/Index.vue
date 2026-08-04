@@ -12,6 +12,31 @@
       <span class="text-gray-400"> · refresh in {{ refreshIn }}s</span>
     </p>
 
+    <div v-if="byTriangle.length" class="mb-6 bg-white rounded-md shadow overflow-x-auto">
+      <table class="w-full whitespace-nowrap text-sm">
+        <thead>
+          <tr class="text-left font-bold">
+            <th class="pb-3 pt-4 px-6">Path</th>
+            <th class="pb-3 pt-4 px-6">Rows</th>
+            <th class="pb-3 pt-4 px-6">Wins</th>
+            <th class="pb-3 pt-4 px-6">Win rate</th>
+            <th class="pb-3 pt-4 px-6">Best</th>
+            <th class="pb-3 pt-4 px-6">Mean</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in byTriangle" :key="row.coin_arbitrage_id" class="hover:bg-gray-50">
+            <td class="border-t px-6 py-3">{{ row.path }}</td>
+            <td class="border-t px-6 py-3">{{ row.total }}</td>
+            <td class="border-t px-6 py-3">{{ row.wins }}</td>
+            <td class="border-t px-6 py-3">{{ row.win_rate.toFixed(2) }}%</td>
+            <td class="border-t px-6 py-3" :class="profitPctClass(row.best_pct)">{{ formatProfitPct(row.best_pct) }}</td>
+            <td class="border-t px-6 py-3" :class="profitPctClass(row.mean_pct)">{{ formatProfitPct(row.mean_pct) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
     <div class="flex items-center justify-between mb-6">
       <search-filter v-model="form.search" class="mr-4 w-full max-w-md" :max-width="360" @reset="reset">
         <label class="block text-gray-700">Profitable:</label>
@@ -120,6 +145,7 @@ export default {
     filters: Object,
     arbitrages: Array,
     summary: Object,
+    byTriangle: { type: Array, default: () => [] },
     arbitrageLogs: Object,
   },
   data() {
@@ -159,7 +185,7 @@ export default {
       if (this.refreshIn <= 0) {
         this.refreshIn = this.refreshIntervalMs / 1000
         this.$inertia.reload({
-          only: ['arbitrageLogs', 'summary'],
+          only: ['arbitrageLogs', 'summary', 'byTriangle'],
           preserveState: true,
           preserveScroll: true,
         })
