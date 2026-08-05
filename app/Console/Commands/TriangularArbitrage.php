@@ -133,16 +133,64 @@ class TriangularArbitrage extends Command
         $reverse = $this->simulatePath($reverseLegs, $prices, $startUSDT, $fee, 'reverse');
     
         $best = collect([$forward, $reverse])->sortByDesc('profit')->first();
-    
+
+        // Confirm greens: stale top-of-book often looks profitable once.
+        if ($best['profit_pct'] > 0 && config('binance.confirm_green', true)) {
+
+            $symbols = [
+                $coinArbitrage->coin_one->symbol,
+                $coinArbitrage->coin_two->symbol,
+                $coinArbitrage->coin_three->symbol,
+            ];
+
+            usleep(50_000); // 50ms — let the feed tick
+
+            $confirmedPrices = $this->fetchPrices($symbols);
+
+            if (! $confirmedPrices) {
+
+                $this->warn('confirm-green: missing/stale books; skip green');
+                
+                return;
+            }
+        
+            $startUSDT = $this->clampCapitalToDepth($coinArbitrage, $confirmedPrices, (float) $coinArbitrage->capital);
+
+            if ($startUSDT <= 0) {
+
+                $this->warn('confirm-green: depth too thin; skip');
+
+                return;
+            }
+        
+            $forward = $this->simulatePath($forwardLegs, $confirmedPrices, $startUSDT, $fee, 'forward');
+            $reverse = $this->simulatePath($reverseLegs, $confirmedPrices, $startUSDT, $fee, 'reverse');
+
+            $best = collect([$forward, $reverse])->sortByDesc('profit')->first();
+
+            $prices = $confirmedPrices;
+        
+            if ($best['profit_pct'] <= 0) {
+
+                $this->warn("confirm-green: faded to {$best['profit_pct']}%");
+
+                // Fall through and log the faded result as NOT_PROFITABLE
+            } else {
+
+                $this->info("confirm-green: still {$best['profit_pct']}%");
+
+            }
+        }
+        
         $quoteAgeMs = $this->maxQuoteAgeMs($prices);
         $pct = number_format($best['profit_pct'], 4);
         $minLogPct = (float) config('binance.log_min_profit_pct', -0.05);
-    
+        
         if ($best['profit_pct'] <= $minLogPct) {
             $this->warn("skip {$best['direction']} {$pct}% (below {$minLogPct}%) age={$quoteAgeMs}ms");
             return;
         }
-    
+        
         ArbitrageLog::create([
             'capital' => $startUSDT,
             'final_amount' => $best['final'],
@@ -155,9 +203,9 @@ class TriangularArbitrage extends Command
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-    
+        
         $minExecute = (float) config('binance.min_execute_profit_pct', 0.05);
-    
+        
         if (
             $best['profit_pct'] >= $minExecute
             && (int) $coinArbitrage->test_mode === 0

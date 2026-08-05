@@ -14,4 +14,5 @@ return [
     // Cap size to this fraction of top-of-book qty (0.25 = 25%).
     'depth_fill_fraction' => (float) env('BINANCE_DEPTH_FILL_FRACTION', 0.25),
     'use_account_fee' => filter_var(env('BINANCE_USE_ACCOUNT_FEE', true), FILTER_VALIDATE_BOOL),
+    'confirm_green' => filter_var(env('BINANCE_CONFIRM_GREEN', true), FILTER_VALIDATE_BOOL),
 ];
