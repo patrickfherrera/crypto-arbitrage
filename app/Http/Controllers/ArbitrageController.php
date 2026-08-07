@@ -20,7 +20,6 @@ class ArbitrageController extends Controller
         return Inertia::render('Arbitrages/Index', [
             'filters' => [
                 'search' => Request::input('search'),
-                'trashed' => Request::input('trashed'),
                 'enabled' => $enabled,
             ],
             'arbitrages' => CoinArbitrage::with([

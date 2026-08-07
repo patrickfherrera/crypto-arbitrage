@@ -10,13 +10,6 @@
           <option value="enabled">Enabled</option>
           <option value="disabled">Disabled</option>
         </select>
-
-        <label class="block text-gray-700 mt-4">Trashed:</label>
-        <select v-model="form.trashed" class="form-select mt-1 w-full">
-          <option :value="null" />
-          <option value="with">With Trashed</option>
-          <option value="only">Only Trashed</option>
-        </select>
       </search-filter>
       <Link class="btn-primary" href="/arbitrages/create">
         <span>Create</span>
@@ -127,7 +120,6 @@ export default {
     return {
       form: {
         search: this.filters.search,
-        trashed: this.filters.trashed,
         enabled: this.filters.enabled || 'all',
       },
     }
@@ -155,7 +147,6 @@ export default {
     reset() {
       this.form = {
         search: null,
-        trashed: null,
         enabled: 'all',
       }
     },
