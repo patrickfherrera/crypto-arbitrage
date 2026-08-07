@@ -4,7 +4,14 @@
     <h1 class="mb-8 text-3xl font-bold">Arbitrage</h1>
     <div class="flex items-center justify-between mb-6">
       <search-filter v-model="form.search" class="mr-4 w-full max-w-md" @reset="reset">
-        <label class="block text-gray-700">Trashed:</label>
+        <label class="block text-gray-700">Enabled:</label>
+        <select v-model="form.enabled" class="form-select mt-1 w-full">
+          <option value="all">All</option>
+          <option value="enabled">Enabled</option>
+          <option value="disabled">Disabled</option>
+        </select>
+
+        <label class="block text-gray-700 mt-4">Trashed:</label>
         <select v-model="form.trashed" class="form-select mt-1 w-full">
           <option :value="null" />
           <option value="with">With Trashed</option>
@@ -100,7 +107,6 @@ import Icon from '@/Shared/Icon.vue'
 import pickBy from 'lodash/pickBy'
 import Layout from '@/Shared/Layout.vue'
 import throttle from 'lodash/throttle'
-import mapValues from 'lodash/mapValues'
 import Pagination from '@/Shared/Pagination.vue'
 import SearchFilter from '@/Shared/SearchFilter.vue'
 
@@ -122,6 +128,7 @@ export default {
       form: {
         search: this.filters.search,
         trashed: this.filters.trashed,
+        enabled: this.filters.enabled || 'all',
       },
     }
   },
@@ -146,7 +153,11 @@ export default {
       return DateTime.fromISO(value).toLocal().toFormat('MM/dd/yyyy h:mma')
     },
     reset() {
-      this.form = mapValues(this.form, () => null)
+      this.form = {
+        search: null,
+        trashed: null,
+        enabled: 'all',
+      }
     },
   },
 }

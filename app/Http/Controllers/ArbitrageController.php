@@ -15,13 +15,21 @@ class ArbitrageController extends Controller
 {
     public function index(): Response
     {
+        $enabled = Request::input('enabled', 'all');
+
         return Inertia::render('Arbitrages/Index', [
-            'filters' => Request::all('search', 'trashed'),
+            'filters' => [
+                'search' => Request::input('search'),
+                'trashed' => Request::input('trashed'),
+                'enabled' => $enabled,
+            ],
             'arbitrages' => CoinArbitrage::with([
                     'coin_one',
                     'coin_two',
                     'coin_three',
                 ])
+                ->when($enabled === 'enabled', fn ($q) => $q->where('enabled', true))
+                ->when($enabled === 'disabled', fn ($q) => $q->where('enabled', false))
                 ->orderByDesc('enabled')
                 ->orderByDesc('created_at')
                 ->paginate(50)
