@@ -22,11 +22,14 @@ class ArbitrageController extends Controller
                     'coin_two',
                     'coin_three',
                 ])
+                ->orderByDesc('enabled')
+                ->orderByDesc('created_at')
                 ->paginate(50)
                 ->withQueryString()
                 ->through(fn ($coinArbitrage) => [
                     'id' => $coinArbitrage->id,
                     'enabled' => (bool) $coinArbitrage->enabled,
+                    'created_at' => $coinArbitrage->created_at?->toIso8601String(),
                     'coin_one' => $coinArbitrage->coin_one,
                     'coin_one_price' => $coinArbitrage->coin_one_price,
                     'coin_two' => $coinArbitrage->coin_two,

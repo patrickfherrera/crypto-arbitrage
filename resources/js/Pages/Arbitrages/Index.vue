@@ -21,6 +21,7 @@
         <thead>
         <tr class="text-left font-bold">
           <th class="pb-4 pt-6 px-6">Enabled</th>
+          <th class="pb-4 pt-6 px-6">Created</th>
           <th class="pb-4 pt-6 px-6">Coin One</th>
           <th class="pb-4 pt-6 px-6"></th>
           <th class="pb-4 pt-6 px-6">Coin Two</th>
@@ -39,6 +40,11 @@
               >
                 {{ arbitrage.enabled ? 'On' : 'Off' }}
               </span>
+            </Link>
+          </td>
+          <td class="border-t">
+            <Link class="flex items-center px-6 py-4" :href="`/arbitrages/${arbitrage.id}/edit`" tabindex="-1">
+              {{ formatCreatedAt(arbitrage.created_at) }}
             </Link>
           </td>
           <td class="border-t">
@@ -78,7 +84,7 @@
           </td>
         </tr>
         <tr v-if="arbitrages.data.length === 0">
-          <td class="px-6 py-4 border-t" colspan="4">No arbitrages found.</td>
+          <td class="px-6 py-4 border-t" colspan="9">No arbitrages found.</td>
         </tr>
         </tbody>
       </table>
@@ -88,6 +94,7 @@
 </template>
 
 <script>
+import { DateTime } from 'luxon'
 import { Head, Link } from '@inertiajs/vue3'
 import Icon from '@/Shared/Icon.vue'
 import pickBy from 'lodash/pickBy'
@@ -133,6 +140,10 @@ export default {
         return `${coin.quote_asset} → ${coin.base_asset}`
       }
       return `${coin.base_asset} → ${coin.quote_asset}`
+    },
+    formatCreatedAt(value) {
+      if (!value) return '—'
+      return DateTime.fromISO(value).toLocal().toFormat('MM/dd/yyyy h:mma')
     },
     reset() {
       this.form = mapValues(this.form, () => null)
