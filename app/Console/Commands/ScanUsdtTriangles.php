@@ -132,11 +132,22 @@ class ScanUsdtTriangles extends Command
         );
 
         if ($this->option('seed')) {
-            foreach (array_slice($top, 0, 10) as $row) {
-                $this->seedRow($row, $capital);
+            CoinArbitrage::query()->update(['enabled' => 0]);
+
+            $seedIds = [];
+            foreach ($top as $row) {
+                $arb = $this->seedRow($row, $capital);
+                if ($arb) {
+                    $seedIds[] = $arb->id;
+                }
             }
+
+            if ($seedIds !== []) {
+                CoinArbitrage::query()->whereIn('id', $seedIds)->update(['enabled' => 1]);
+            }
+
             Cache::put('binance.feed.reload', true);
-            $this->info('Seeded top rows (enabled=1, test_mode=1); feed reload requested.');
+            $this->info('Disabled others; enabled '.count($seedIds).' scan hits (test_mode=1); feed reload requested.');
         }
 
         return self::SUCCESS;
@@ -210,21 +221,22 @@ class ScanUsdtTriangles extends Command
         return [$leg1, $leg2, $leg3];
     }
 
-    protected function seedRow(array $row, float $capital): void
+    protected function seedRow(array $row, float $capital): ?CoinArbitrage
     {
         $syms = $row['symbols'];
         $sides = array_column($row['legs'], 'side');
         $coins = [];
-    
+
         foreach ($syms as $symbol) {
             $meta = $this->pairs[$symbol] ?? null;
             if (! $meta) {
                 $this->warn("Skip seed; missing pair meta for {$symbol}");
-                return;
+
+                return null;
             }
-    
+
             $coin = Coin::query()->where('symbol', $symbol)->first();
-    
+
             if (! $coin) {
                 $coin = new Coin([
                     'base_asset' => $meta['base'],
@@ -233,11 +245,11 @@ class ScanUsdtTriangles extends Command
                 // Coin::creating sets symbol = base+quote
                 $coin->save();
             }
-    
+
             $coins[] = $coin;
         }
-    
-        CoinArbitrage::firstOrCreate(
+
+        $arb = CoinArbitrage::firstOrCreate(
             [
                 'coin_one_id' => $coins[0]->id,
                 'coin_two_id' => $coins[1]->id,
@@ -250,9 +262,20 @@ class ScanUsdtTriangles extends Command
                 'profit' => 0,
                 'capital' => $capital,
                 'test_mode' => 1,
-                'enabled' => 1,
+                'enabled' => 0,
             ]
         );
+
+        $arb->fill([
+            'coin_one_price' => $sides[0] ?? 'askPrice',
+            'coin_two_price' => $sides[1] ?? 'bidPrice',
+            'coin_three_price' => $sides[2] ?? 'bidPrice',
+            'capital' => $capital,
+            'test_mode' => 1,
+            'enabled' => 1,
+        ])->save();
+
+        return $arb;
     }
 
     /**
