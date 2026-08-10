@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ArbitrageLog;
 use App\Models\Coin;
 use App\Models\CoinArbitrage;
 use Illuminate\Http\RedirectResponse;
@@ -16,6 +17,13 @@ class ArbitrageController extends Controller
     public function index(): Response
     {
         $enabled = Request::input('enabled', 'all');
+
+        $stats = ArbitrageLog::query()
+            ->whereNotNull('profit_pct')
+            ->selectRaw('coin_arbitrage_id, COUNT(*) as total, SUM(CASE WHEN profit_pct > 0 THEN 1 ELSE 0 END) as wins, MAX(profit_pct) as best_pct, AVG(profit_pct) as mean_pct')
+            ->groupBy('coin_arbitrage_id')
+            ->get()
+            ->keyBy('coin_arbitrage_id');
 
         return Inertia::render('Arbitrages/Index', [
             'filters' => [
@@ -33,17 +41,30 @@ class ArbitrageController extends Controller
                 ->orderByDesc('created_at')
                 ->paginate(50)
                 ->withQueryString()
-                ->through(fn ($coinArbitrage) => [
-                    'id' => $coinArbitrage->id,
-                    'enabled' => (bool) $coinArbitrage->enabled,
-                    'created_at' => $coinArbitrage->created_at?->toIso8601String(),
-                    'coin_one' => $coinArbitrage->coin_one,
-                    'coin_one_price' => $coinArbitrage->coin_one_price,
-                    'coin_two' => $coinArbitrage->coin_two,
-                    'coin_two_price' => $coinArbitrage->coin_two_price,
-                    'coin_three' => $coinArbitrage->coin_three,
-                    'coin_three_price' => $coinArbitrage->coin_three_price,
-                ]),
+                ->through(function ($coinArbitrage) use ($stats) {
+                    $row = $stats->get($coinArbitrage->id);
+                    $total = (int) ($row->total ?? 0);
+                    $wins = (int) ($row->wins ?? 0);
+
+                    return [
+                        'id' => $coinArbitrage->id,
+                        'enabled' => (bool) $coinArbitrage->enabled,
+                        'test_mode' => (bool) $coinArbitrage->test_mode,
+                        'capital' => $coinArbitrage->capital !== null ? (float) $coinArbitrage->capital : null,
+                        'created_at' => $coinArbitrage->created_at?->toIso8601String(),
+                        'coin_one' => $coinArbitrage->coin_one,
+                        'coin_one_price' => $coinArbitrage->coin_one_price,
+                        'coin_two' => $coinArbitrage->coin_two,
+                        'coin_two_price' => $coinArbitrage->coin_two_price,
+                        'coin_three' => $coinArbitrage->coin_three,
+                        'coin_three_price' => $coinArbitrage->coin_three_price,
+                        'log_total' => $total,
+                        'wins' => $wins,
+                        'win_rate' => $total > 0 ? ($wins / $total) * 100 : null,
+                        'best_pct' => $row?->best_pct !== null ? (float) $row->best_pct : null,
+                        'mean_pct' => $row?->mean_pct !== null ? (float) $row->mean_pct : null,
+                    ];
+                }),
         ]);
     }
 

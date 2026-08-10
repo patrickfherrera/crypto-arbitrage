@@ -21,6 +21,8 @@
         <thead>
         <tr class="text-left font-bold">
           <th class="pb-4 pt-6 px-6">Enabled</th>
+          <th class="pb-4 pt-6 px-6">Test</th>
+          <th class="pb-4 pt-6 px-6">Capital</th>
           <th class="pb-4 pt-6 px-6">Created</th>
           <th class="pb-4 pt-6 px-6">Coin One</th>
           <th class="pb-4 pt-6 px-6"></th>
@@ -28,6 +30,11 @@
           <th class="pb-4 pt-6 px-6"></th>
           <th class="pb-4 pt-6 px-6">Coin Three</th>
           <th class="pb-4 pt-6 px-6"></th>
+          <th class="pb-4 pt-6 px-6">Rows</th>
+          <th class="pb-4 pt-6 px-6">Wins</th>
+          <th class="pb-4 pt-6 px-6">Win rate</th>
+          <th class="pb-4 pt-6 px-6">Best</th>
+          <th class="pb-4 pt-6 px-6">Mean</th>
         </tr>
         </thead>
         <tbody>
@@ -40,6 +47,21 @@
               >
                 {{ arbitrage.enabled ? 'On' : 'Off' }}
               </span>
+            </Link>
+          </td>
+          <td class="border-t">
+            <Link class="flex items-center px-6 py-4" :href="`/arbitrages/${arbitrage.id}/edit`" tabindex="-1">
+              <span
+                class="inline-block rounded px-2 py-0.5 text-xs font-medium"
+                :class="arbitrage.test_mode ? 'bg-amber-100 text-amber-800' : 'bg-sky-100 text-sky-800'"
+              >
+                {{ arbitrage.test_mode ? 'Test' : 'Live' }}
+              </span>
+            </Link>
+          </td>
+          <td class="border-t">
+            <Link class="flex items-center px-6 py-4" :href="`/arbitrages/${arbitrage.id}/edit`" tabindex="-1">
+              {{ formatCapital(arbitrage.capital) }}
             </Link>
           </td>
           <td class="border-t">
@@ -77,6 +99,41 @@
               {{ directionLabel(arbitrage.coin_three, arbitrage.coin_three_price) }}
             </Link>
           </td>
+          <td class="border-t">
+            <Link class="flex items-center px-6 py-4" :href="`/arbitrages/${arbitrage.id}/edit`" tabindex="-1">
+              {{ arbitrage.log_total }}
+            </Link>
+          </td>
+          <td class="border-t">
+            <Link class="flex items-center px-6 py-4" :href="`/arbitrages/${arbitrage.id}/edit`" tabindex="-1">
+              {{ arbitrage.wins }}
+            </Link>
+          </td>
+          <td class="border-t">
+            <Link class="flex items-center px-6 py-4" :href="`/arbitrages/${arbitrage.id}/edit`" tabindex="-1">
+              {{ formatWinRate(arbitrage.win_rate) }}
+            </Link>
+          </td>
+          <td class="border-t">
+            <Link
+              class="flex items-center px-6 py-4"
+              :href="`/arbitrages/${arbitrage.id}/edit`"
+              tabindex="-1"
+              :class="profitPctClass(arbitrage.best_pct)"
+            >
+              {{ formatProfitPct(arbitrage.best_pct) }}
+            </Link>
+          </td>
+          <td class="border-t">
+            <Link
+              class="flex items-center px-6 py-4"
+              :href="`/arbitrages/${arbitrage.id}/edit`"
+              tabindex="-1"
+              :class="profitPctClass(arbitrage.mean_pct)"
+            >
+              {{ formatProfitPct(arbitrage.mean_pct) }}
+            </Link>
+          </td>
           <td class="w-px border-t">
             <Link class="flex items-center px-4" :href="`/arbitrages/${arbitrage.id}/edit`" tabindex="-1">
               <icon name="cheveron-right" class="block w-6 h-6 fill-gray-400" />
@@ -84,7 +141,7 @@
           </td>
         </tr>
         <tr v-if="arbitrages.data.length === 0">
-          <td class="px-6 py-4 border-t" colspan="9">No arbitrages found.</td>
+          <td class="px-6 py-4 border-t" colspan="16">No arbitrages found.</td>
         </tr>
         </tbody>
       </table>
@@ -143,6 +200,24 @@ export default {
     formatCreatedAt(value) {
       if (!value) return '—'
       return DateTime.fromISO(value).toLocal().toFormat('MM/dd/yyyy h:mma')
+    },
+    formatCapital(value) {
+      if (value === null || value === undefined) return '—'
+      return Number(value).toFixed(2)
+    },
+    formatWinRate(value) {
+      if (value === null || value === undefined) return '—'
+      return `${Number(value).toFixed(2)}%`
+    },
+    formatProfitPct(value) {
+      if (value === null || value === undefined) return '—'
+      return `${Number(value).toFixed(4)}%`
+    },
+    profitPctClass(value) {
+      if (value === null || value === undefined) return 'text-gray-400'
+      if (value > 0) return 'text-green-600'
+      if (value < 0) return 'text-red-600'
+      return 'text-gray-700'
     },
     reset() {
       this.form = {
