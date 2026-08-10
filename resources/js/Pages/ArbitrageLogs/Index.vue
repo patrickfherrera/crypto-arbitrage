@@ -5,6 +5,7 @@
 
     <p class="mb-4 text-sm text-gray-600">
       {{ summary.total }} rows
+      <span class="text-gray-400">({{ rangeLabel }})</span>
       · best
       <span :class="profitPctClass(summary.best_pct)">{{ formatProfitPct(summary.best_pct) }}</span>
       · mean
@@ -22,7 +23,16 @@
 
     <div class="flex items-center justify-between mb-6">
       <search-filter v-model="form.search" class="mr-4 w-full max-w-md" :max-width="360" @reset="reset">
-        <label class="block text-gray-700">Profitable:</label>
+        <label class="block text-gray-700">Time range:</label>
+        <select v-model="form.range" class="form-select mt-1 w-full">
+          <option value="1h">Last 1 hour</option>
+          <option value="24h">Last 24 hours</option>
+          <option value="7d">Last 7 days</option>
+          <option value="30d">Last 30 days</option>
+          <option value="all">All time</option>
+        </select>
+
+        <label class="block text-gray-700 mt-4">Profitable:</label>
         <select v-model="form.profitable" class="form-select mt-1 w-full">
           <option :value="null">All</option>
           <option value="PROFITABLE">Profitable</option>
@@ -175,9 +185,11 @@ export default {
   },
   data() {
     return {
-      refreshIntervalMs: 15000,
-      refreshIn: 15,
+      refreshIntervalMs: 60000,
+      refreshIn: 60,
       refreshTimer: null,
+      statsRefreshEvery: 5,
+      statsRefreshCount: 0,
       form: {
         search: this.filters.search,
         profitable: this.filters.profitable,
@@ -185,6 +197,7 @@ export default {
         coin_arbitrage_id: this.filters.coin_arbitrage_id ? String(this.filters.coin_arbitrage_id) : '',
         sort: this.filters.sort || 'newest',
         triangle_sort: this.filters.triangle_sort || 'wins',
+        range: this.filters.range || '24h',
       },
     }
   },
@@ -200,6 +213,15 @@ export default {
       const match = (this.arbitrages || []).find(arb => String(arb.id) === id)
       return match?.label || `#${id}`
     },
+    rangeLabel() {
+      return {
+        '1h': 'last 1h',
+        '24h': 'last 24h',
+        '7d': 'last 7d',
+        '30d': 'last 30d',
+        all: 'all time',
+      }[this.form.range] || 'last 24h'
+    },
   },
   watch: {
     form: {
@@ -209,6 +231,7 @@ export default {
           if (value === null || value === undefined || value === '') return false
           if (key === 'sort' && value === 'newest') return false
           if (key === 'triangle_sort' && value === 'wins') return false
+          if (key === 'range' && value === '24h') return false
           return true
         })
         this.$inertia.get('/arbitrage-logs', query, { preserveState: true })
@@ -221,8 +244,12 @@ export default {
       this.refreshIn -= 1
       if (this.refreshIn <= 0) {
         this.refreshIn = this.refreshIntervalMs / 1000
+        this.statsRefreshCount += 1
+        const only = this.statsRefreshCount % this.statsRefreshEvery === 0
+          ? ['arbitrageLogs', 'summary', 'byTriangle']
+          : ['arbitrageLogs']
         this.$inertia.reload({
-          only: ['arbitrageLogs', 'summary', 'byTriangle'],
+          only,
           preserveState: true,
           preserveScroll: true,
         })
@@ -244,6 +271,7 @@ export default {
         coin_arbitrage_id: '',
         sort: 'newest',
         triangle_sort: 'wins',
+        range: '24h',
       }
     },
     formatProfitPct(value) {

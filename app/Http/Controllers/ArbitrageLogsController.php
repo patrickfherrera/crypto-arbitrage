@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ArbitrageLog;
 use App\Models\CoinArbitrage;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Request;
 use Inertia\Inertia;
@@ -15,8 +16,9 @@ class ArbitrageLogsController extends Controller
     {
         $sort = Request::input('sort', 'newest');
         $triangleSort = Request::input('triangle_sort', 'wins');
+        $range = Request::input('range', '24h');
 
-        $baseQuery = $this->filteredLogsQuery();
+        $baseQuery = $this->filteredLogsQuery($range);
 
         $summaryRow = (clone $baseQuery)
             ->whereNotNull('profit_pct')
@@ -45,14 +47,15 @@ class ArbitrageLogsController extends Controller
         };
 
         return Inertia::render('ArbitrageLogs/Index', [
-            'filters' => Request::all(
-                'search',
-                'profitable',
-                'direction',
-                'coin_arbitrage_id',
-                'sort',
-                'triangle_sort'
-            ),
+            'filters' => [
+                'search' => Request::input('search'),
+                'profitable' => Request::input('profitable'),
+                'direction' => Request::input('direction'),
+                'coin_arbitrage_id' => Request::input('coin_arbitrage_id'),
+                'sort' => $sort,
+                'triangle_sort' => $triangleSort,
+                'range' => $range,
+            ],
             'arbitrages' => CoinArbitrage::with(['coin_one', 'coin_two', 'coin_three'])
                 ->orderBy('id')
                 ->get()
@@ -64,6 +67,7 @@ class ArbitrageLogsController extends Controller
                 'total' => (int) ($summaryRow->total ?? 0),
                 'best_pct' => $summaryRow->best_pct !== null ? (float) $summaryRow->best_pct : null,
                 'mean_pct' => $summaryRow->mean_pct !== null ? (float) $summaryRow->mean_pct : null,
+                'range' => $range,
             ],
             'byTriangle' => $byTriangleQuery
                 ->paginate(10, ['*'], 'triangle_page')
@@ -79,10 +83,10 @@ class ArbitrageLogsController extends Controller
                 ]),
             'arbitrageLogs' => $baseQuery
                 ->with([
-                    'coin_arbitrage',
-                    'coin_arbitrage.coin_one',
-                    'coin_arbitrage.coin_two',
-                    'coin_arbitrage.coin_three',
+                    'coin_arbitrage:id,coin_one_id,coin_two_id,coin_three_id',
+                    'coin_arbitrage.coin_one:id,symbol',
+                    'coin_arbitrage.coin_two:id,symbol',
+                    'coin_arbitrage.coin_three:id,symbol',
                 ])
                 ->whereNotNull('profit_pct')
                 ->when($sort === 'best_pct', function ($query) {
@@ -117,9 +121,12 @@ class ArbitrageLogsController extends Controller
         ]);
     }
 
-    protected function filteredLogsQuery(): Builder
+    protected function filteredLogsQuery(string $range): Builder
     {
         return ArbitrageLog::query()
+            ->when($this->rangeStart($range), function ($query, Carbon $start) {
+                $query->where('created_at', '>=', $start);
+            })
             ->when(Request::filled('profitable'), function ($query) {
                 $query->where('status', Request::input('profitable'));
             })
@@ -137,5 +144,16 @@ class ArbitrageLogsController extends Controller
                         ->orWhereHas('coin_three', fn ($c) => $c->where('symbol', 'like', "%{$search}%"));
                 });
             });
+    }
+
+    protected function rangeStart(string $range): ?Carbon
+    {
+        return match ($range) {
+            '1h' => now()->subHour(),
+            '7d' => now()->subDays(7),
+            '30d' => now()->subDays(30),
+            'all' => null,
+            default => now()->subDay(), // 24h
+        };
     }
 }
