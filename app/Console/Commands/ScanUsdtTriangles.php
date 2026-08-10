@@ -15,8 +15,7 @@ class ScanUsdtTriangles extends Command
                             {--quote=USDT}
                             {--capital=100}
                             {--top=30}
-                            {--seed : Create enabled CoinArbitrage rows for top hits (test_mode=1)}
-                            {--min-profit=-1 : Min profit_pct to print}';
+                            {--seed : Create enabled CoinArbitrage rows for top hits (test_mode=1)}';
 
     protected $description = 'Enumerate quote triangles from exchangeInfo and score via REST bookTicker';
 
@@ -29,7 +28,6 @@ class ScanUsdtTriangles extends Command
         $quote = strtoupper((string) $this->option('quote'));
         $capital = (float) $this->option('capital');
         $fee = $fees->takerFee();
-        $minProfit = (float) $this->option('min-profit');
 
         $this->info("Fetching exchangeInfo… fee={$fee}");
 
@@ -108,10 +106,6 @@ class ScanUsdtTriangles extends Command
             $rev = $this->scoreUsdtTriangle($prices, $s1, $s2, $s3, $a, $b, $capital, $fee, 'reverse');
             $best = $fwd['profit_pct'] >= $rev['profit_pct'] ? $fwd : $rev;
 
-            if ($best['profit_pct'] < $minProfit) {
-                continue;
-            }
-
             $scored[] = $best + [
                 'symbols' => [$s1, $s2, $s3],
                 'assets' => [$a, $b, $quote],
@@ -147,7 +141,7 @@ class ScanUsdtTriangles extends Command
             }
 
             Cache::put('binance.feed.reload', true);
-            $this->info('Disabled others; enabled '.count($seedIds).' scan hits (test_mode=1); feed reload requested.');
+            $this->info('Disabled others; enabled '.count($seedIds).' of top '.(int) $this->option('top').' (test_mode=1); feed reload requested.');
         }
 
         return self::SUCCESS;
