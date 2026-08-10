@@ -205,7 +205,13 @@ export default {
     form: {
       deep: true,
       handler: throttle(function () {
-        this.$inertia.get('/arbitrage-logs', pickBy(this.form), { preserveState: true })
+        const query = pickBy(this.form, (value, key) => {
+          if (value === null || value === undefined || value === '') return false
+          if (key === 'sort' && value === 'newest') return false
+          if (key === 'triangle_sort' && value === 'wins') return false
+          return true
+        })
+        this.$inertia.get('/arbitrage-logs', query, { preserveState: true })
       }, 150),
     },
   },
@@ -228,7 +234,7 @@ export default {
   },
   methods: {
     clearPathFilter() {
-      this.form.coin_arbitrage_id = ''
+      this.$inertia.get('/arbitrage-logs')
     },
     reset() {
       this.form = {
