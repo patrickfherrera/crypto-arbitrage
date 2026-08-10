@@ -12,11 +12,6 @@
         <div class="flex flex-wrap -mb-8 -mr-6 p-8">
           <text-input v-model="form.base_asset" :error="form.errors.base_asset" class="pb-8 pr-6 w-full lg:w-1/2" label="Base Asset" />
           <text-input v-model="form.quote_asset" :error="form.errors.quote_asset" class="pb-8 pr-6 w-full lg:w-1/2" label="Quote Asset" />
-          <text-input v-model="form.transfer_fee" :error="form.errors.transfer_fee" class="pb-8 pr-6 w-full lg:w-1/2" label="Transfer Fee" />
-          <select-input v-model="form.enabled" :error="form.errors.enabled" class="pb-8 pr-6 w-full lg:w-1/2" label="Enabled">
-            <option value="1">Yes</option>
-            <option value="0">No</option>
-          </select-input>
         </div>
         <div class="flex items-center px-8 py-4 bg-gray-50 border-t border-gray-100">
           <button v-if="!coin.deleted_at" class="text-red-600 hover:underline" tabindex="-1" type="button" @click="destroy">Delete Coin</button>
@@ -32,7 +27,6 @@ import { Head, Link } from '@inertiajs/vue3'
 import Icon from '@/Shared/Icon.vue'
 import Layout from '@/Shared/Layout.vue'
 import TextInput from '@/Shared/TextInput.vue'
-import SelectInput from '@/Shared/SelectInput.vue'
 import LoadingButton from '@/Shared/LoadingButton.vue'
 import TrashedMessage from '@/Shared/TrashedMessage.vue'
 
@@ -42,7 +36,6 @@ export default {
     Icon,
     Link,
     LoadingButton,
-    SelectInput,
     TextInput,
     TrashedMessage,
   },
@@ -52,14 +45,11 @@ export default {
   },
   remember: 'form',
   data() {
-    console.log(this.coin)
     return {
       form: this.$inertia.form({
         base_asset: this.coin.base_asset,
         quote_asset: this.coin.quote_asset,
-        transfer_fee: this.coin.transfer_fee,
-        enabled: this.coin.enabled,
-        deleted_at: this.coin.deleted_at
+        deleted_at: this.coin.deleted_at,
       }),
     }
   },

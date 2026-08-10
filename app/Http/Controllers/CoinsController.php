@@ -24,8 +24,6 @@ class CoinsController extends Controller
                     'symbol' => $coin->symbol,
                     'base_asset' => $coin->base_asset,
                     'quote_asset' => $coin->quote_asset,
-                    'transfer_fee' => $coin->transfer_fee,
-                    'enabled' => $coin->enabled,
                     'deleted_at' => $coin->deleted_at,
                 ]),
         ]);
@@ -42,8 +40,6 @@ class CoinsController extends Controller
             Request::validate([
                 'base_asset' => ['required'],
                 'quote_asset' => ['required'],
-                'transfer_fee' => ['required', 'numeric'],
-                'enabled' => ['boolean']
             ])
         );
 
@@ -57,9 +53,7 @@ class CoinsController extends Controller
                 'id' => $coin->id,
                 'base_asset' => $coin->base_asset,
                 'quote_asset' => $coin->quote_asset,
-                'transfer_fee' => $coin->transfer_fee,
-                'enabled' => $coin->enabled,
-                'deleted_at' => $coin->deleted_at
+                'deleted_at' => $coin->deleted_at,
             ],
         ]);
     }
@@ -67,10 +61,8 @@ class CoinsController extends Controller
     public function update(Coin $coin): RedirectResponse
     {
         $data = Request::validate([
-            'base_asset'   => ['required'],
-            'quote_asset'  => ['required'],
-            'transfer_fee' => ['required', 'numeric'],
-            'enabled'      => ['boolean'],
+            'base_asset' => ['required'],
+            'quote_asset' => ['required'],
         ]);
 
         $data['symbol'] = $data['base_asset'] . $data['quote_asset'];
