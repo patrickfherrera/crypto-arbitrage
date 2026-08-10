@@ -12,34 +12,6 @@
       <span class="text-gray-400"> · refresh in {{ refreshIn }}s</span>
     </p>
 
-    <h2 class="mb-2 text-lg font-semibold">By Triangle</h2>
-    <div v-if="byTriangle.length" class="mb-6 bg-white rounded-md shadow overflow-x-auto">
-      <table class="w-full whitespace-nowrap text-sm">
-        <thead>
-          <tr class="text-left font-bold">
-            <th class="pb-3 pt-4 px-6">Path</th>
-            <th class="pb-3 pt-4 px-6">Rows</th>
-            <th class="pb-3 pt-4 px-6">Wins</th>
-            <th class="pb-3 pt-4 px-6">Win rate</th>
-            <th class="pb-3 pt-4 px-6">Best</th>
-            <th class="pb-3 pt-4 px-6">Mean</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="row in byTriangle" :key="row.coin_arbitrage_id" class="hover:bg-gray-50">
-            <td class="border-t px-6 py-3">{{ row.path }}</td>
-            <td class="border-t px-6 py-3">{{ row.total }}</td>
-            <td class="border-t px-6 py-3">{{ row.wins }}</td>
-            <td class="border-t px-6 py-3">{{ row.win_rate.toFixed(2) }}%</td>
-            <td class="border-t px-6 py-3" :class="profitPctClass(row.best_pct)">{{ formatProfitPct(row.best_pct) }}</td>
-            <td class="border-t px-6 py-3" :class="profitPctClass(row.mean_pct)">{{ formatProfitPct(row.mean_pct) }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <h2 class="mb-2 text-lg font-semibold">Recent logs</h2>
-
     <div class="flex items-center justify-between mb-6">
       <search-filter v-model="form.search" class="mr-4 w-full max-w-md" :max-width="360" @reset="reset">
         <label class="block text-gray-700">Profitable:</label>
@@ -64,14 +36,56 @@
           </option>
         </select>
 
-        <label class="block text-gray-700 mt-4">Sort:</label>
+        <label class="block text-gray-700 mt-4">By triangle sort:</label>
+        <select v-model="form.triangle_sort" class="form-select mt-1 w-full">
+          <option value="wins">Most wins</option>
+          <option value="win_rate">Win rate</option>
+          <option value="best_pct">Best %</option>
+          <option value="mean_pct">Mean %</option>
+          <option value="rows">Most rows</option>
+        </select>
+
+        <label class="block text-gray-700 mt-4">Logs sort:</label>
         <select v-model="form.sort" class="form-select mt-1 w-full">
           <option value="newest">Newest</option>
+          <option value="oldest">Oldest</option>
           <option value="best_pct">Best profit %</option>
+          <option value="worst_pct">Worst profit %</option>
         </select>
       </search-filter>
     </div>
 
+    <h2 class="mb-2 text-lg font-semibold">By Triangle</h2>
+    <div class="mb-2 bg-white rounded-md shadow overflow-x-auto">
+      <table class="w-full whitespace-nowrap text-sm">
+        <thead>
+          <tr class="text-left font-bold">
+            <th class="pb-3 pt-4 px-6">Path</th>
+            <th class="pb-3 pt-4 px-6">Rows</th>
+            <th class="pb-3 pt-4 px-6">Wins</th>
+            <th class="pb-3 pt-4 px-6">Win rate</th>
+            <th class="pb-3 pt-4 px-6">Best</th>
+            <th class="pb-3 pt-4 px-6">Mean</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in byTriangle.data" :key="row.coin_arbitrage_id" class="hover:bg-gray-50">
+            <td class="border-t px-6 py-3">{{ row.path }}</td>
+            <td class="border-t px-6 py-3">{{ row.total }}</td>
+            <td class="border-t px-6 py-3">{{ row.wins }}</td>
+            <td class="border-t px-6 py-3">{{ row.win_rate.toFixed(2) }}%</td>
+            <td class="border-t px-6 py-3" :class="profitPctClass(row.best_pct)">{{ formatProfitPct(row.best_pct) }}</td>
+            <td class="border-t px-6 py-3" :class="profitPctClass(row.mean_pct)">{{ formatProfitPct(row.mean_pct) }}</td>
+          </tr>
+          <tr v-if="byTriangle.data.length === 0">
+            <td class="px-6 py-4 border-t" colspan="6">No triangle stats yet.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <pagination class="mb-8" :links="byTriangle.links" />
+
+    <h2 class="mb-2 text-lg font-semibold">Recent logs</h2>
     <div class="bg-white rounded-md shadow overflow-x-auto">
       <table class="w-full whitespace-nowrap">
         <tr class="text-left font-bold">
@@ -148,7 +162,7 @@ export default {
     filters: Object,
     arbitrages: Array,
     summary: Object,
-    byTriangle: { type: Array, default: () => [] },
+    byTriangle: { type: Object, default: () => ({ data: [], links: [] }) },
     arbitrageLogs: Object,
   },
   data() {
@@ -162,6 +176,7 @@ export default {
         direction: this.filters.direction,
         coin_arbitrage_id: this.filters.coin_arbitrage_id,
         sort: this.filters.sort || 'newest',
+        triangle_sort: this.filters.triangle_sort || 'wins',
       },
     }
   },
@@ -206,6 +221,7 @@ export default {
         direction: null,
         coin_arbitrage_id: null,
         sort: 'newest',
+        triangle_sort: 'wins',
       }
     },
     formatProfitPct(value) {
