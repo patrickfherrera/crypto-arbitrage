@@ -12,6 +12,14 @@
       <span class="text-gray-400"> · refresh in {{ refreshIn }}s</span>
     </p>
 
+    <p v-if="form.coin_arbitrage_id" class="mb-4 text-sm text-gray-700">
+      Filtered by path:
+      <span class="font-medium">{{ selectedPathLabel }}</span>
+      <button type="button" class="ml-2 text-slate-600 underline hover:text-slate-900" @click="clearPathFilter">
+        Clear
+      </button>
+    </p>
+
     <div class="flex items-center justify-between mb-6">
       <search-filter v-model="form.search" class="mr-4 w-full max-w-md" :max-width="360" @reset="reset">
         <label class="block text-gray-700">Profitable:</label>
@@ -30,7 +38,7 @@
 
         <label class="block text-gray-700 mt-4">Path:</label>
         <select v-model="form.coin_arbitrage_id" class="form-select mt-1 w-full">
-          <option :value="null">All</option>
+          <option value="">All</option>
           <option v-for="arb in arbitrages" :key="arb.id" :value="String(arb.id)">
             {{ arb.label }}
           </option>
@@ -174,7 +182,7 @@ export default {
         search: this.filters.search,
         profitable: this.filters.profitable,
         direction: this.filters.direction,
-        coin_arbitrage_id: this.filters.coin_arbitrage_id,
+        coin_arbitrage_id: this.filters.coin_arbitrage_id ? String(this.filters.coin_arbitrage_id) : '',
         sort: this.filters.sort || 'newest',
         triangle_sort: this.filters.triangle_sort || 'wins',
       },
@@ -186,6 +194,11 @@ export default {
         ...arbitrageLog,
         created_at: DateTime.fromISO(arbitrageLog.created_at).toLocal().toFormat('MM/dd/yyyy h:mma'),
       }))
+    },
+    selectedPathLabel() {
+      const id = String(this.form.coin_arbitrage_id || '')
+      const match = (this.arbitrages || []).find(arb => String(arb.id) === id)
+      return match?.label || `#${id}`
     },
   },
   watch: {
@@ -214,12 +227,15 @@ export default {
     if (this.refreshTimer) clearInterval(this.refreshTimer)
   },
   methods: {
+    clearPathFilter() {
+      this.form.coin_arbitrage_id = ''
+    },
     reset() {
       this.form = {
         search: null,
         profitable: null,
         direction: null,
-        coin_arbitrage_id: null,
+        coin_arbitrage_id: '',
         sort: 'newest',
         triangle_sort: 'wins',
       }
