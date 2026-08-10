@@ -97,7 +97,7 @@ class ArbitrageLogsController extends Controller
                 ->when(! in_array($sort, ['best_pct', 'worst_pct', 'oldest'], true), function ($query) {
                     $query->orderByDesc('created_at');
                 })
-                ->paginate(25)
+                ->paginate(10)
                 ->withQueryString()
                 ->through(fn ($arbitrageLog) => [
                     'id' => $arbitrageLog->id,
