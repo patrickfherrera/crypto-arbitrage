@@ -71,6 +71,7 @@
           <option value="worst_pct">Worst profit %</option>
         </select>
       </search-filter>
+      <a class="btn-primary whitespace-nowrap" :href="exportUrl">Export CSV</a>
     </div>
 
     <h2 class="mb-2 text-lg font-semibold">By Triangle</h2>
@@ -197,7 +198,7 @@ export default {
         coin_arbitrage_id: this.filters.coin_arbitrage_id ? String(this.filters.coin_arbitrage_id) : '',
         sort: this.filters.sort || 'newest',
         triangle_sort: this.filters.triangle_sort || 'wins',
-        range: this.filters.range || '24h',
+        range: this.filters.range || '1h',
       },
     }
   },
@@ -220,7 +221,18 @@ export default {
         '7d': 'last 7d',
         '30d': 'last 30d',
         all: 'all time',
-      }[this.form.range] || 'last 24h'
+      }[this.form.range] || 'last 1h'
+    },
+    exportUrl() {
+      const query = pickBy(this.form, (value, key) => {
+        if (value === null || value === undefined || value === '') return false
+        if (key === 'triangle_sort') return false
+        if (key === 'sort' && value === 'newest') return false
+        if (key === 'range' && value === '1h') return false
+        return true
+      })
+      const qs = new URLSearchParams(query).toString()
+      return qs ? `/arbitrage-logs/export?${qs}` : '/arbitrage-logs/export'
     },
   },
   watch: {
@@ -231,7 +243,7 @@ export default {
           if (value === null || value === undefined || value === '') return false
           if (key === 'sort' && value === 'newest') return false
           if (key === 'triangle_sort' && value === 'wins') return false
-          if (key === 'range' && value === '24h') return false
+          if (key === 'range' && value === '1h') return false
           return true
         })
         this.$inertia.get('/arbitrage-logs', query, { preserveState: true })
@@ -271,7 +283,7 @@ export default {
         coin_arbitrage_id: '',
         sort: 'newest',
         triangle_sort: 'wins',
-        range: '24h',
+        range: '1h',
       }
     },
     formatProfitPct(value) {
