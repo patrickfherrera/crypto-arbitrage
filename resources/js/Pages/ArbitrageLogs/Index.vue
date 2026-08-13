@@ -71,7 +71,14 @@
           <option value="worst_pct">Worst profit %</option>
         </select>
       </search-filter>
-      <a class="btn-primary whitespace-nowrap" :href="exportUrl">Export CSV</a>
+      <button
+        type="button"
+        class="btn-primary whitespace-nowrap"
+        :disabled="exporting"
+        @click="startExport"
+      >
+        {{ exporting ? 'Starting…' : 'Export CSV' }}
+      </button>
     </div>
 
     <h2 class="mb-2 text-lg font-semibold">By Triangle</h2>
@@ -191,6 +198,7 @@ export default {
       refreshTimer: null,
       statsRefreshEvery: 5,
       statsRefreshCount: 0,
+      exporting: false,
       form: {
         search: this.filters.search,
         profitable: this.filters.profitable,
@@ -222,17 +230,6 @@ export default {
         '30d': 'last 30d',
         all: 'all time',
       }[this.form.range] || 'last 1h'
-    },
-    exportUrl() {
-      const query = pickBy(this.form, (value, key) => {
-        if (value === null || value === undefined || value === '') return false
-        if (key === 'triangle_sort') return false
-        if (key === 'sort' && value === 'newest') return false
-        if (key === 'range' && value === '1h') return false
-        return true
-      })
-      const qs = new URLSearchParams(query).toString()
-      return qs ? `/arbitrage-logs/export?${qs}` : '/arbitrage-logs/export'
     },
   },
   watch: {
@@ -272,6 +269,21 @@ export default {
     if (this.refreshTimer) clearInterval(this.refreshTimer)
   },
   methods: {
+    startExport() {
+      if (this.exporting) return
+      this.exporting = true
+      const payload = pickBy(this.form, (value, key) => {
+        if (value === null || value === undefined || value === '') return false
+        if (key === 'triangle_sort') return false
+        return true
+      })
+      this.$inertia.post('/arbitrage-logs/export', payload, {
+        preserveScroll: true,
+        onFinish: () => {
+          this.exporting = false
+        },
+      })
+    },
     clearPathFilter() {
       this.$inertia.get('/arbitrage-logs')
     },

@@ -127,7 +127,7 @@ Route::get('arbitrage-logs', [ArbitrageLogsController::class, 'index'])
     ->name('arbitrage-logs.index')
     ->middleware('auth');
 
-Route::get('arbitrage-logs/export', [ArbitrageLogsController::class, 'export'])
+Route::post('arbitrage-logs/export', [ArbitrageLogsController::class, 'export'])
     ->name('arbitrage-logs.export')
     ->middleware('auth');
 

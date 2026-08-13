@@ -2,19 +2,23 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ArbitrageLog;
+use App\Jobs\ExportArbitrageLogsCsv;
 use App\Models\CoinArbitrage;
-use Carbon\Carbon;
-use Illuminate\Database\Eloquent\Builder;
+use App\Services\ArbitrageLogCsvExporter;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Request;
 use Inertia\Inertia;
 use Inertia\Response;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ArbitrageLogsController extends Controller
 {
+    public function __construct(
+        protected ArbitrageLogCsvExporter $exporter,
+    ) {}
+
     public function index(): Response
     {
         $sort = Request::input('sort', 'newest');
@@ -42,7 +46,13 @@ class ArbitrageLogsController extends Controller
             'arb_logs_stats:'.md5(json_encode($filterKey)),
             30,
             function () use ($range, $triangleSort, $labels) {
-                $baseQuery = $this->filteredLogsQuery($range)->whereNotNull('profit_pct');
+                $baseQuery = $this->exporter->filteredLogsQuery([
+                    'range' => $range,
+                    'profitable' => Request::input('profitable'),
+                    'direction' => Request::input('direction'),
+                    'coin_arbitrage_id' => Request::input('coin_arbitrage_id'),
+                    'search' => Request::input('search'),
+                ])->whereNotNull('profit_pct');
 
                 $summaryRow = (clone $baseQuery)
                     ->selectRaw('COUNT(*) as total, MAX(profit_pct) as best_pct, AVG(profit_pct) as mean_pct')
@@ -99,7 +109,13 @@ class ArbitrageLogsController extends Controller
             ]
         );
 
-        $baseQuery = $this->filteredLogsQuery($range)
+        $baseQuery = $this->exporter->filteredLogsQuery([
+            'range' => $range,
+            'profitable' => Request::input('profitable'),
+            'direction' => Request::input('direction'),
+            'coin_arbitrage_id' => Request::input('coin_arbitrage_id'),
+            'search' => Request::input('search'),
+        ])
             ->with([
                 'coin_arbitrage:id,coin_one_id,coin_two_id,coin_three_id',
                 'coin_arbitrage.coin_one:id,symbol',
@@ -108,7 +124,7 @@ class ArbitrageLogsController extends Controller
             ])
             ->whereNotNull('profit_pct');
 
-        $this->applyLogSort($baseQuery, $sort);
+        $this->exporter->applyLogSort($baseQuery, $sort);
 
         return Inertia::render('ArbitrageLogs/Index', [
             'filters' => [
@@ -147,119 +163,21 @@ class ArbitrageLogsController extends Controller
         ]);
     }
 
-    public function export(): StreamedResponse
+    public function export(): RedirectResponse
     {
-        $sort = Request::input('sort', 'newest');
-        $range = Request::input('range', '1h');
-        $maxRows = 100_000;
+        $filters = [
+            'range' => Request::input('range', '1h'),
+            'sort' => Request::input('sort', 'newest'),
+            'profitable' => Request::input('profitable'),
+            'direction' => Request::input('direction'),
+            'coin_arbitrage_id' => Request::input('coin_arbitrage_id'),
+            'search' => Request::input('search'),
+        ];
 
-        $query = $this->filteredLogsQuery($range)
-            ->with([
-                'coin_arbitrage:id,coin_one_id,coin_two_id,coin_three_id',
-                'coin_arbitrage.coin_one:id,symbol',
-                'coin_arbitrage.coin_two:id,symbol',
-                'coin_arbitrage.coin_three:id,symbol',
-            ])
-            ->whereNotNull('profit_pct');
+        ExportArbitrageLogsCsv::dispatch(Auth::id(), $filters);
 
-        $this->applyLogSort($query, $sort);
-
-        $filename = 'arbitrage-logs-'.$range.'-'.now()->format('Y-m-d-His').'.csv';
-
-        return response()->streamDownload(function () use ($query, $maxRows) {
-            $out = fopen('php://output', 'w');
-            fputcsv($out, [
-                'id',
-                'created_at',
-                'path',
-                'capital',
-                'profit',
-                'profit_pct',
-                'direction',
-                'quote_age_ms',
-                'status',
-                'coin_arbitrage_id',
-            ]);
-
-            $count = 0;
-            foreach ($query->cursor() as $log) {
-                if ($count >= $maxRows) {
-                    break;
-                }
-
-                $path = $log->coin_arbitrage
-                    ? $log->coin_arbitrage->coin_one->symbol
-                        .' → '.$log->coin_arbitrage->coin_two->symbol
-                        .' → '.$log->coin_arbitrage->coin_three->symbol
-                    : '';
-
-                fputcsv($out, [
-                    $log->id,
-                    $log->created_at?->toIso8601String(),
-                    $path,
-                    $log->capital,
-                    $log->profit,
-                    $log->profit_pct,
-                    $log->direction,
-                    $log->quote_age_ms,
-                    $log->status,
-                    $log->coin_arbitrage_id,
-                ]);
-                $count++;
-            }
-
-            fclose($out);
-        }, $filename, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-        ]);
-    }
-
-    protected function applyLogSort(Builder $query, string $sort): void
-    {
-        if ($sort === 'best_pct') {
-            $query->orderByDesc('profit_pct')->orderByDesc('created_at');
-        } elseif ($sort === 'worst_pct') {
-            $query->orderBy('profit_pct')->orderByDesc('created_at');
-        } elseif ($sort === 'oldest') {
-            $query->orderBy('created_at');
-        } else {
-            $query->orderByDesc('created_at');
-        }
-    }
-
-    protected function filteredLogsQuery(string $range): Builder
-    {
-        return ArbitrageLog::query()
-            ->when($this->rangeStart($range), function ($query, Carbon $start) {
-                $query->where('created_at', '>=', $start);
-            })
-            ->when(Request::filled('profitable'), function ($query) {
-                $query->where('status', Request::input('profitable'));
-            })
-            ->when(Request::filled('direction'), function ($query) {
-                $query->where('direction', Request::input('direction'));
-            })
-            ->when(Request::filled('coin_arbitrage_id'), function ($query) {
-                $query->where('coin_arbitrage_id', Request::input('coin_arbitrage_id'));
-            })
-            ->when(Request::filled('search'), function ($query) {
-                $search = Request::input('search');
-                $query->whereHas('coin_arbitrage', function ($q) use ($search) {
-                    $q->whereHas('coin_one', fn ($c) => $c->where('symbol', 'like', "%{$search}%"))
-                        ->orWhereHas('coin_two', fn ($c) => $c->where('symbol', 'like', "%{$search}%"))
-                        ->orWhereHas('coin_three', fn ($c) => $c->where('symbol', 'like', "%{$search}%"));
-                });
-            });
-    }
-
-    protected function rangeStart(string $range): ?Carbon
-    {
-        return match ($range) {
-            '24h' => now()->subDay(),
-            '7d' => now()->subDays(7),
-            '30d' => now()->subDays(30),
-            'all' => null,
-            default => now()->subHour(), // 1h
-        };
+        return redirect()
+            ->route('arbitrage-logs.index', array_filter($filters, fn ($v) => $v !== null && $v !== ''))
+            ->with('success', 'Export started — check your email shortly.');
     }
 }
