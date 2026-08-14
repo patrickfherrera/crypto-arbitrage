@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\ArbitrageLog;
+use App\Models\CoinArbitrage;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Storage;
@@ -35,12 +36,19 @@ class ArbitrageLogCsvExporter
             'coin_arbitrage_id',
         ]);
 
+        $pathLabels = $this->pathLabels();
+
         $query = $this->filteredLogsQuery($filters)
-            ->with([
-                'coin_arbitrage:id,coin_one_id,coin_two_id,coin_three_id',
-                'coin_arbitrage.coin_one:id,symbol',
-                'coin_arbitrage.coin_two:id,symbol',
-                'coin_arbitrage.coin_three:id,symbol',
+            ->select([
+                'id',
+                'created_at',
+                'capital',
+                'profit',
+                'profit_pct',
+                'direction',
+                'quote_age_ms',
+                'status',
+                'coin_arbitrage_id',
             ])
             ->whereNotNull('profit_pct');
 
@@ -52,16 +60,10 @@ class ArbitrageLogCsvExporter
                 break;
             }
 
-            $path = $log->coin_arbitrage
-                ? $log->coin_arbitrage->coin_one->symbol
-                    .' → '.$log->coin_arbitrage->coin_two->symbol
-                    .' → '.$log->coin_arbitrage->coin_three->symbol
-                : '';
-
             fputcsv($out, [
                 $log->id,
                 $log->created_at?->toIso8601String(),
-                $path,
+                $pathLabels[$log->coin_arbitrage_id] ?? '',
                 $log->capital,
                 $log->profit,
                 $log->profit_pct,
@@ -76,6 +78,24 @@ class ArbitrageLogCsvExporter
         fclose($out);
 
         return $count;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function pathLabels(): array
+    {
+        return CoinArbitrage::query()
+            ->with([
+                'coin_one:id,symbol',
+                'coin_two:id,symbol',
+                'coin_three:id,symbol',
+            ])
+            ->get(['id', 'coin_one_id', 'coin_two_id', 'coin_three_id'])
+            ->mapWithKeys(fn (CoinArbitrage $a) => [
+                $a->id => $a->coin_one->symbol.' → '.$a->coin_two->symbol.' → '.$a->coin_three->symbol,
+            ])
+            ->all();
     }
 
     /**
