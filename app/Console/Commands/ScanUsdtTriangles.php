@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\ArbitrageLog;
 use App\Models\Coin;
 use App\Models\CoinArbitrage;
 use App\Services\Binance\FeeResolver;
@@ -15,6 +16,8 @@ class ScanUsdtTriangles extends Command
                             {--quote=USDT}
                             {--capital=100}
                             {--top=30}
+                            {--min-seed-pct=-0.05 : Minimum score % to include when seeding}
+                            {--cull-days=7 : Lookback days when culling historical losers}
                             {--seed : Create enabled CoinArbitrage rows for top hits (test_mode=1)}';
 
     protected $description = 'Enumerate quote triangles from exchangeInfo and score via REST bookTicker';
@@ -104,7 +107,8 @@ class ScanUsdtTriangles extends Command
             // Path forward: USDT→A (buy A), A→B on cross, B→USDT (sell B)
             $fwd = $this->scoreUsdtTriangle($prices, $s1, $s2, $s3, $a, $b, $capital, $fee, 'forward');
             $rev = $this->scoreUsdtTriangle($prices, $s1, $s2, $s3, $a, $b, $capital, $fee, 'reverse');
-            $best = $fwd['profit_pct'] >= $rev['profit_pct'] ? $fwd : $rev;
+            // Prefer reverse on ties / near-ties (paper wins are reverse-dominated).
+            $best = $rev['profit_pct'] >= $fwd['profit_pct'] - 0.01 ? $rev : $fwd;
 
             $scored[] = $best + [
                 'symbols' => [$s1, $s2, $s3],
@@ -112,9 +116,25 @@ class ScanUsdtTriangles extends Command
             ];
         }
 
-        usort($scored, fn ($x, $y) => $y['profit_pct'] <=> $x['profit_pct']);
-        $top = array_slice($scored, 0, (int) $this->option('top'));
+        usort($scored, function ($x, $y) {
+            $cmp = $y['profit_pct'] <=> $x['profit_pct'];
+            if ($cmp !== 0) {
+                return $cmp;
+            }
 
+            // Stable: reverse before forward on equal pct
+            return ($y['direction'] === 'reverse' ? 1 : 0) <=> ($x['direction'] === 'reverse' ? 1 : 0);
+        });
+
+        $minSeedPct = (float) $this->option('min-seed-pct');
+        $top = array_values(array_filter(
+            array_slice($scored, 0, (int) $this->option('top')),
+            fn ($r) => $r['profit_pct'] >= $minSeedPct
+        ));
+        // If filter wiped the slice, fall back to raw top N
+        if ($top === []) {
+            $top = array_slice($scored, 0, (int) $this->option('top'));
+        }
         $this->table(
             ['pct', 'dir', 'path', 'final'],
             array_map(fn ($r) => [
@@ -140,11 +160,53 @@ class ScanUsdtTriangles extends Command
                 CoinArbitrage::query()->whereIn('id', $seedIds)->update(['enabled' => 1]);
             }
 
+            $culled = $this->cullHistoricalLosers((int) $this->option('cull-days'), $seedIds);
+            if ($culled > 0) {
+                $this->warn("Culled {$culled} historical loser(s) from enabled set.");
+            }
+
             Cache::put('binance.feed.reload', true);
             $this->info('Disabled others; enabled '.count($seedIds).' of top '.(int) $this->option('top').' (test_mode=1); feed reload requested.');
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Disable seeded rows that historically never win and bleed in the lookback window.
+     *
+     * @param  array<int, int>  $seedIds
+     */
+    protected function cullHistoricalLosers(int $days, array $seedIds): int
+    {
+        if ($days <= 0 || $seedIds === []) {
+            return 0;
+        }
+
+        $since = now()->subDays($days);
+        $culled = 0;
+
+        foreach ($seedIds as $id) {
+            $stats = ArbitrageLog::query()
+                ->where('coin_arbitrage_id', $id)
+                ->where('created_at', '>=', $since)
+                ->whereNotNull('profit_pct')
+                ->selectRaw('COUNT(*) as total, SUM(CASE WHEN profit_pct > 0 AND status = ? THEN 1 ELSE 0 END) as wins, AVG(profit_pct) as mean_pct', ['PROFITABLE'])
+                ->first();
+
+            $total = (int) ($stats->total ?? 0);
+            $wins = (int) ($stats->wins ?? 0);
+            $mean = $stats->mean_pct !== null ? (float) $stats->mean_pct : null;
+
+            // Need enough history; zero wins + deeply negative mean → disable.
+            if ($total >= 100 && $wins === 0 && $mean !== null && $mean < -0.10) {
+                CoinArbitrage::query()->whereKey($id)->update(['enabled' => 0]);
+                $culled++;
+                $this->line("  cull #{$id}: rows={$total} wins=0 mean=".number_format($mean, 4).'%');
+            }
+        }
+
+        return $culled;
     }
 
     protected function scoreUsdtTriangle(
