@@ -16,7 +16,6 @@ class ScanUsdtTriangles extends Command
                             {--quote=USDT}
                             {--capital=100}
                             {--top=30}
-                            {--min-seed-pct=-0.05 : Minimum score % to include when seeding}
                             {--cull-days=7 : Lookback days when culling historical losers}
                             {--seed : Create enabled CoinArbitrage rows for top hits (test_mode=1)}';
 
@@ -126,15 +125,7 @@ class ScanUsdtTriangles extends Command
             return ($y['direction'] === 'reverse' ? 1 : 0) <=> ($x['direction'] === 'reverse' ? 1 : 0);
         });
 
-        $minSeedPct = (float) $this->option('min-seed-pct');
-        $top = array_values(array_filter(
-            array_slice($scored, 0, (int) $this->option('top')),
-            fn ($r) => $r['profit_pct'] >= $minSeedPct
-        ));
-        // If filter wiped the slice, fall back to raw top N
-        if ($top === []) {
-            $top = array_slice($scored, 0, (int) $this->option('top'));
-        }
+        $top = array_slice($scored, 0, (int) $this->option('top'));
         $this->table(
             ['pct', 'dir', 'path', 'final'],
             array_map(fn ($r) => [
