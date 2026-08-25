@@ -578,20 +578,130 @@ class TriangularArbitrage extends Command
      */
     protected function bumpCapitalForMinNotional(array $legs, float $capital): float
     {
-        $maxMin = 0.0;
+        $symbols = [];
         foreach ($legs as [$coin]) {
-            if (($coin->quote_asset ?? null) !== 'USDT') {
+            $symbols[] = strtoupper($coin->symbol);
+            $quote = strtoupper((string) ($coin->quote_asset ?? ''));
+            if ($quote !== '' && $quote !== 'USDT') {
+                $symbols[] = $quote.'USDT';
+            }
+        }
+
+        $books = $this->bestEffortBooks($symbols);
+        $maxMinUsdt = 0.0;
+
+        foreach ($legs as [$coin]) {
+            $min = $this->symbolMinNotional($coin->symbol);
+            if ($min <= 0) {
                 continue;
             }
-            $maxMin = max($maxMin, $this->symbolMinNotional($coin->symbol));
+            $asUsdt = $this->notionalToUsdt(
+                $min,
+                (string) ($coin->quote_asset ?? 'USDT'),
+                $books
+            );
+            $maxMinUsdt = max($maxMinUsdt, $asUsdt);
         }
 
-        if ($maxMin <= 0) {
-            return $capital;
+        // Coarse LOT_SIZE (e.g. BNB 0.001) + 3× fees needs headroom beyond raw minNotional.
+        $floor = max(
+            (float) config('binance.min_execute_capital', 10),
+            $maxMinUsdt * 1.5
+        );
+
+        return max($capital, round($floor, 2));
+    }
+
+    /**
+     * @param  list<string>  $symbols
+     * @return array<string, array{bidPrice: float, askPrice: float, bidQty?: float, askQty?: float, ts?: int}>
+     */
+    protected function bestEffortBooks(array $symbols): array
+    {
+        $store = app(BookTickerStore::class);
+        $out = [];
+
+        foreach (array_unique(array_map('strtoupper', $symbols)) as $symbol) {
+            $one = $store->getMany([$symbol]);
+            if ($one !== null) {
+                $out[$symbol] = $one[$symbol];
+            }
         }
 
-        // Three taker fees + lot rounding often drop a $5 start under a $5 minNotional exit.
-        return max($capital, round($maxMin * 1.25, 2));
+        return $out;
+    }
+
+    /**
+     * @param  array<string, array{bidPrice: float, askPrice: float}>  $books
+     */
+    protected function notionalToUsdt(float $minNotional, string $quoteAsset, array $books): float
+    {
+        $quote = strtoupper($quoteAsset);
+
+        if (in_array($quote, ['USDT', 'USD', 'BUSD'], true)) {
+            return $minNotional;
+        }
+
+        if ($quote === '') {
+            return $minNotional;
+        }
+
+        $pair = $quote.'USDT';
+        $px = $this->midPrice($books, $pair);
+
+        if ($px <= 0) {
+            $px = $this->restBookMid($pair);
+        }
+
+        if ($px <= 0) {
+            // Last resort: don't under-bump — use a conservative placeholder for BTC/ETH.
+            return match ($quote) {
+                'BTC' => $minNotional * 100_000,
+                'ETH' => $minNotional * 3_000,
+                'BNB' => $minNotional * 700,
+                default => $minNotional * 10,
+            };
+        }
+
+        return $minNotional * $px;
+    }
+
+    /**
+     * @param  array<string, array{bidPrice: float, askPrice: float}>  $books
+     */
+    protected function midPrice(array $books, string $symbol): float
+    {
+        $row = $books[strtoupper($symbol)] ?? null;
+        if (! $row) {
+            return 0.0;
+        }
+        $bid = (float) ($row['bidPrice'] ?? 0);
+        $ask = (float) ($row['askPrice'] ?? 0);
+        if ($bid > 0 && $ask > 0) {
+            return ($bid + $ask) / 2;
+        }
+
+        return max($bid, $ask);
+    }
+
+    protected function restBookMid(string $symbol): float
+    {
+        try {
+            $response = $this->binance()->get('ticker/bookTicker', ['symbol' => strtoupper($symbol)]);
+            if (! $response->successful()) {
+                return 0.0;
+            }
+            $json = $response->json();
+            $bid = (float) ($json['bidPrice'] ?? 0);
+            $ask = (float) ($json['askPrice'] ?? 0);
+            if ($bid > 0 && $ask > 0) {
+                return ($bid + $ask) / 2;
+            }
+
+            return max($bid, $ask);
+        } catch (\Throwable) {
+            return 0.0;
+        }
     }
 
     protected function symbolMinNotional(string $symbol): float
@@ -620,7 +730,6 @@ class TriangularArbitrage extends Command
         }
 
         if ($side === 'BUY' && $quoteQty !== null) {
-            // quoteOrderQty is already in quote-asset units (USDT or ETH, etc.)
             if ($quoteQty + 1e-12 < $min) {
                 throw new \RuntimeException(
                     "Leg {$legNumber} {$coin->symbol} BUY: quoteOrderQty {$quoteQty} < minNotional {$min}."
@@ -631,7 +740,7 @@ class TriangularArbitrage extends Command
         }
 
         if ($side === 'SELL' && $qty !== null) {
-            $book = app(BookTickerStore::class)->getMany([$coin->symbol]);
+            $book = $this->bestEffortBooks([$coin->symbol]);
             $bid = (float) ($book[$coin->symbol]['bidPrice'] ?? 0);
             if ($bid <= 0) {
                 return;
