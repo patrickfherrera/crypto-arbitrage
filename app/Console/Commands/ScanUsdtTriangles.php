@@ -17,9 +17,9 @@ class ScanUsdtTriangles extends Command
                             {--capital=100}
                             {--top=30}
                             {--cull-days=7 : Lookback days when culling historical losers}
-                            {--seed : Create enabled CoinArbitrage rows for top hits (test_mode=1)}';
+                            {--seed : Create/enable top CoinArbitrage rows (test_mode=0 / live)}';
 
-    protected $description = 'Enumerate quote triangles from exchangeInfo and score via REST bookTicker';
+    protected $description = 'Enumerate quote triangles, score via REST bookTicker, and optionally enable top hits as live';
 
 
     /** @var array<string, array{base: string, quote: string}> */
@@ -157,7 +157,7 @@ class ScanUsdtTriangles extends Command
             }
 
             Cache::put('binance.feed.reload', true);
-            $this->info('Disabled others; enabled '.count($seedIds).' of top '.(int) $this->option('top').' (test_mode=1); feed reload requested.');
+            $this->info('Disabled others; enabled '.count($seedIds).' of top '.(int) $this->option('top').' (test_mode=0 / live); feed reload requested.');
         }
 
         return self::SUCCESS;
@@ -308,7 +308,7 @@ class ScanUsdtTriangles extends Command
                 'coin_three_price' => $sides[2] ?? 'bidPrice',
                 'profit' => 0,
                 'capital' => $capital,
-                'test_mode' => 1,
+                'test_mode' => 0,
                 'enabled' => 0,
             ]
         );
@@ -318,7 +318,7 @@ class ScanUsdtTriangles extends Command
             'coin_two_price' => $sides[1] ?? 'bidPrice',
             'coin_three_price' => $sides[2] ?? 'bidPrice',
             'capital' => $capital,
-            'test_mode' => 1,
+            'test_mode' => 0,
             'enabled' => 1,
         ])->save();
 

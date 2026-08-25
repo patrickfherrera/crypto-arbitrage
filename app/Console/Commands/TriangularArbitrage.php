@@ -536,25 +536,28 @@ class TriangularArbitrage extends Command
                 $balances = $trade->freeBalancesMap();
             }
 
+            $legNumber = $index + 1;
             $side = $priceSide === 'askPrice' ? 'BUY' : 'SELL';
             $legCapital = $index === 0 ? $capitalUSDT : null;
             $params = $this->getTradeParams($coin, $side, $legCapital, $balances);
 
-            if (isset($params['quantity']) && (float) $params['quantity'] <= 0) {
+            $qty = isset($params['quantity']) ? (float) $params['quantity'] : null;
+            $quoteQty = isset($params['quoteOrderQty']) ? (float) $params['quoteOrderQty'] : null;
+            if (($qty !== null && $qty <= 0) || ($quoteQty !== null && $quoteQty <= 0) || ($qty === null && $quoteQty === null)) {
                 throw new \RuntimeException(
-                    "Leg {$index} {$coin->symbol} {$side}: quantity is 0 (insufficient balance or lot size)."
+                    "Leg {$legNumber} {$coin->symbol} {$side}: size is 0 (insufficient balance or lot size)."
                 );
             }
 
-            $this->info('Sending leg '.($index + 1)."/{$coin->symbol} {$side} ".json_encode($params));
+            $this->info("Sending leg {$legNumber}/{$coin->symbol} {$side} ".json_encode($params));
 
             $response = $trade->newOrder($params);
             $body = $this->orderResponseBody($response);
 
             if ($response instanceof \GuzzleHttp\Exception\ClientException) {
-                $this->error("Leg {$index} {$coin->symbol} FAILED: {$body}");
+                $this->error("Leg {$legNumber} {$coin->symbol} FAILED: {$body}");
                 throw new \RuntimeException(
-                    "Binance rejected leg {$index} {$coin->symbol} {$side}: {$body}"
+                    "Binance rejected leg {$legNumber} {$coin->symbol} {$side}: {$body}"
                 );
             }
 
@@ -590,8 +593,13 @@ class TriangularArbitrage extends Command
         $filters = $symbolMeta['filters'] ?? [];
 
         $lotSize = collect($filters)->firstWhere('filterType', 'LOT_SIZE');
-        $stepSize = (float) $lotSize['stepSize'];
-        $precision = strlen(rtrim(substr(strrchr(rtrim((string) $stepSize, '0'), '.'), 1), '.'));
+        $stepSize = (float) ($lotSize['stepSize'] ?? 0.00000001);
+        $precision = max(0, strlen(rtrim(substr(strrchr(rtrim((string) $stepSize, '0'), '.') ?: '', 1), '.')));
+
+        $quotePrecision = (int) ($symbolMeta['quoteAssetPrecision'] ?? $symbolMeta['quotePrecision'] ?? 8);
+        if ($coin->quote_asset === 'USDT') {
+            $quotePrecision = min($quotePrecision, 2);
+        }
 
         $params = [
             'symbol' => $coin->symbol,
@@ -600,27 +608,33 @@ class TriangularArbitrage extends Command
             'side' => $side,
         ];
 
-        switch (true) {
-            case $side === 'BUY' && $coin->quote_asset == 'USDT':
-                $params['quoteOrderQty'] = number_format((float) $capitalUSDT, 2, '.', '');
+        if ($side === 'BUY') {
+            // Spend quote asset via quoteOrderQty (works for USDT and cross pairs like SOLETH).
+            if ($capitalUSDT !== null) {
+                $quoteAmount = (float) $capitalUSDT;
+            } else {
+                $quoteFree = $balances !== null
+                    ? (float) ($balances[$coin->quote_asset] ?? 0)
+                    : (float) (new Trade)->accountInformation($coin->quote_asset);
+                // Slight buffer so fees/rounding don't trip insufficient balance.
+                $quoteAmount = $quoteFree * 0.999;
+            }
 
-                break;
+            $factor = 10 ** max(0, $quotePrecision);
+            $quoteAmount = floor($quoteAmount * $factor) / $factor;
+            $params['quoteOrderQty'] = number_format($quoteAmount, $quotePrecision, '.', '');
 
-            case $side === 'SELL' && $coin->quote_asset == 'USDT':
-                $balance = $balances !== null
-                    ? (float) ($balances[$coin->base_asset] ?? 0)
-                    : (float) (new Trade)->accountInformation($coin->base_asset);
-                $params['quantity'] = floor($balance / $stepSize) * $stepSize;
-
-                break;
-
-            default:
-                $balance = $balances !== null
-                    ? (float) ($balances[$coin->base_asset] ?? 0)
-                    : (float) (new Trade)->accountInformation($coin->base_asset);
-                $qty = floor($balance / $stepSize) * $stepSize;
-                $params['quantity'] = round($qty, $precision);
+            return $params;
         }
+
+        // SELL: dump free base asset, stepped to LOT_SIZE.
+        $balance = $balances !== null
+            ? (float) ($balances[$coin->base_asset] ?? 0)
+            : (float) (new Trade)->accountInformation($coin->base_asset);
+        $qty = floor($balance / $stepSize) * $stepSize;
+        $params['quantity'] = $precision > 0
+            ? number_format($qty, $precision, '.', '')
+            : (string) (int) $qty;
 
         return $params;
     }
