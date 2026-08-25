@@ -217,7 +217,12 @@ class TriangularArbitrage extends Command
             && (int) $coinArbitrage->test_mode === 0
         ) {
             $this->info("✅ EXECUTE {$best['direction']} {$pct}% cap={$startUSDT} age={$quoteAgeMs}ms");
-            $this->setParams($coinArbitrage, $startUSDT, $best['direction']);
+            try {
+                $this->setParams($coinArbitrage, $startUSDT, $best['direction']);
+            } catch (\Throwable $e) {
+                $this->error('Live execute failed (may be partial): '.$e->getMessage());
+                report($e);
+            }
         } else {
             $this->warn("❌ {$best['direction']} {$pct}% profit={$best['profit']} cap={$startUSDT} age={$quoteAgeMs}ms");
         }
@@ -455,9 +460,49 @@ class TriangularArbitrage extends Command
             $side = $priceSide === 'askPrice' ? 'BUY' : 'SELL';
             $legCapital = $index === 0 ? $capitalUSDT : null;
             $params = $this->getTradeParams($coin, $side, $legCapital, $balances);
+
+            if (isset($params['quantity']) && (float) $params['quantity'] <= 0) {
+                throw new \RuntimeException(
+                    "Leg {$index} {$coin->symbol} {$side}: quantity is 0 (insufficient balance or lot size)."
+                );
+            }
+
+            $this->info('Sending leg '.($index + 1)."/{$coin->symbol} {$side} ".json_encode($params));
+
             $response = $trade->newOrder($params);
-            $this->info($response->getBody()->getContents());
+            $body = $this->orderResponseBody($response);
+
+            if ($response instanceof \GuzzleHttp\Exception\ClientException) {
+                $this->error("Leg {$index} {$coin->symbol} FAILED: {$body}");
+                throw new \RuntimeException(
+                    "Binance rejected leg {$index} {$coin->symbol} {$side}: {$body}"
+                );
+            }
+
+            $this->info($body);
         }
+    }
+
+    /**
+     * @param  \Psr\Http\Message\ResponseInterface|\GuzzleHttp\Exception\ClientException|mixed  $response
+     */
+    protected function orderResponseBody(mixed $response): string
+    {
+        if ($response instanceof \GuzzleHttp\Exception\ClientException) {
+            $resp = $response->getResponse();
+
+            return $resp ? (string) $resp->getBody() : $response->getMessage();
+        }
+
+        if ($response instanceof \Psr\Http\Message\ResponseInterface) {
+            return (string) $response->getBody();
+        }
+
+        if ($response instanceof \Throwable) {
+            return $response->getMessage();
+        }
+
+        return is_string($response) ? $response : json_encode($response);
     }
 
     protected function getTradeParams(Coin $coin, string $side, ?float $capitalUSDT = null, ?array $balances = null): array

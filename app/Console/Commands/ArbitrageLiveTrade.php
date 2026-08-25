@@ -146,16 +146,16 @@ class ArbitrageLiveTrade extends TriangularArbitrage
         $usdtBefore = (float) ($before['USDT'] ?? 0);
         $this->info('USDT before: '.number_format($usdtBefore, 8));
 
+        $tradeError = null;
         try {
             $this->setParams($arb, $startUSDT, $best['direction']);
         } catch (\Throwable $e) {
-            $this->error('Trade failed: '.$e->getMessage());
+            $tradeError = $e;
+            $this->error('Trade failed (may be partial): '.$e->getMessage());
             report($e);
-
-            return self::FAILURE;
         }
 
-        // Brief settle so balances refresh
+        // Brief settle so balances refresh (also after partial fills)
         usleep(500_000);
         $after = $trade->freeBalancesMap();
         $usdtAfter = (float) ($after['USDT'] ?? 0);
@@ -163,13 +163,18 @@ class ArbitrageLiveTrade extends TriangularArbitrage
 
         $this->info('USDT after:  '.number_format($usdtAfter, 8));
         $this->info('USDT delta:  '.number_format($delta, 8).($delta >= 0 ? ' (up)' : ' (down)'));
+        $this->line('Key balances after: '.json_encode(array_filter(
+            $after,
+            fn ($v, $k) => in_array($k, ['USDT', 'USDC', 'ETH', 'SOL', 'BTC'], true) || $v > 0,
+            ARRAY_FILTER_USE_BOTH
+        )));
 
         ArbitrageLog::create([
             'capital' => $startUSDT,
             'final_amount' => $usdtAfter,
             'profit' => $delta,
             'profit_pct' => $usdtBefore > 0 ? ($delta / $usdtBefore) * 100 : $best['profit_pct'],
-            'status' => $delta >= 0 ? 'PROFITABLE' : 'NOT_PROFITABLE',
+            'status' => $tradeError ? 'NOT_PROFITABLE' : ($delta >= 0 ? 'PROFITABLE' : 'NOT_PROFITABLE'),
             'direction' => $best['direction'],
             'quote_age_ms' => $quoteAgeMs,
             'coin_arbitrage_id' => $arb->id,
@@ -179,7 +184,7 @@ class ArbitrageLiveTrade extends TriangularArbitrage
 
         $this->info('Logged live result to arbitrage_logs.');
 
-        return self::SUCCESS;
+        return $tradeError ? self::FAILURE : self::SUCCESS;
     }
 
     /**
