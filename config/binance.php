@@ -13,7 +13,7 @@ return [
     // Live only if profit_pct >= this (after fees). 0.05 = 0.05%.
     'min_execute_profit_pct' => (float) env('BINANCE_MIN_EXECUTE_PROFIT_PCT', 0.05),
     // Live only if clamped capital is at least this (USDT).
-    'min_execute_capital' => (float) env('BINANCE_MIN_EXECUTE_CAPITAL', 3),
+    'min_execute_capital' => (float) env('BINANCE_MIN_EXECUTE_CAPITAL', 10),
     // Skip green execute / treat as stale when max book age exceeds this (ms).
     'max_quote_age_ms' => (int) env('BINANCE_MAX_QUOTE_AGE_MS', 300),
     // best | prefer_reverse | reverse_only | forward_only

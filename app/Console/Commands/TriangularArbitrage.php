@@ -531,6 +531,12 @@ class TriangularArbitrage extends Command
             ];
         }
 
+        $bumped = $this->bumpCapitalForMinNotional($legs, $capitalUSDT);
+        if ($bumped > $capitalUSDT + 1e-8) {
+            $this->warn("Bumping capital {$capitalUSDT} → {$bumped} so exit legs clear Binance minNotional.");
+            $capitalUSDT = $bumped;
+        }
+
         foreach ($legs as $index => [$coin, $priceSide]) {
             if ($index > 0) {
                 $balances = $trade->freeBalancesMap();
@@ -549,6 +555,8 @@ class TriangularArbitrage extends Command
                 );
             }
 
+            $this->assertMeetsMinNotional($coin, $side, $qty, $quoteQty, $legNumber);
+
             $this->info("Sending leg {$legNumber}/{$coin->symbol} {$side} ".json_encode($params));
 
             $response = $trade->newOrder($params);
@@ -562,6 +570,78 @@ class TriangularArbitrage extends Command
             }
 
             $this->info($body);
+        }
+    }
+
+    /**
+     * @param  array<int, array{0: Coin, 1: string}>  $legs
+     */
+    protected function bumpCapitalForMinNotional(array $legs, float $capital): float
+    {
+        $maxMin = 0.0;
+        foreach ($legs as [$coin]) {
+            if (($coin->quote_asset ?? null) !== 'USDT') {
+                continue;
+            }
+            $maxMin = max($maxMin, $this->symbolMinNotional($coin->symbol));
+        }
+
+        if ($maxMin <= 0) {
+            return $capital;
+        }
+
+        // Three taker fees + lot rounding often drop a $5 start under a $5 minNotional exit.
+        return max($capital, round($maxMin * 1.25, 2));
+    }
+
+    protected function symbolMinNotional(string $symbol): float
+    {
+        $filters = collect($this->cachedExchangeSymbol($symbol)['filters'] ?? []);
+        $row = $filters->firstWhere('filterType', 'NOTIONAL')
+            ?? $filters->firstWhere('filterType', 'MIN_NOTIONAL');
+
+        if (! $row) {
+            return 0.0;
+        }
+
+        return (float) ($row['minNotional'] ?? $row['notional'] ?? 0);
+    }
+
+    protected function assertMeetsMinNotional(
+        Coin $coin,
+        string $side,
+        ?float $qty,
+        ?float $quoteQty,
+        int $legNumber
+    ): void {
+        $min = $this->symbolMinNotional($coin->symbol);
+        if ($min <= 0) {
+            return;
+        }
+
+        if ($side === 'BUY' && $quoteQty !== null) {
+            // quoteOrderQty is already in quote-asset units (USDT or ETH, etc.)
+            if ($quoteQty + 1e-12 < $min) {
+                throw new \RuntimeException(
+                    "Leg {$legNumber} {$coin->symbol} BUY: quoteOrderQty {$quoteQty} < minNotional {$min}."
+                );
+            }
+
+            return;
+        }
+
+        if ($side === 'SELL' && $qty !== null) {
+            $book = app(BookTickerStore::class)->getMany([$coin->symbol]);
+            $bid = (float) ($book[$coin->symbol]['bidPrice'] ?? 0);
+            if ($bid <= 0) {
+                return;
+            }
+            $notional = $qty * $bid;
+            if ($notional + 1e-12 < $min) {
+                throw new \RuntimeException(
+                    "Leg {$legNumber} {$coin->symbol} SELL: notional {$notional} < minNotional {$min} (qty={$qty}, bid={$bid}). Increase capital."
+                );
+            }
         }
     }
 
