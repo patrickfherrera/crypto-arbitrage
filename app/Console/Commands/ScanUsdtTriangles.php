@@ -137,7 +137,8 @@ class ScanUsdtTriangles extends Command
         );
 
         if ($this->option('seed')) {
-            CoinArbitrage::query()->update(['enabled' => 0]);
+            // Park everyone as disabled + test; top hits are re-enabled live below.
+            CoinArbitrage::query()->update(['enabled' => 0, 'test_mode' => 1]);
 
             $seedIds = [];
             foreach ($top as $row) {
@@ -148,7 +149,10 @@ class ScanUsdtTriangles extends Command
             }
 
             if ($seedIds !== []) {
-                CoinArbitrage::query()->whereIn('id', $seedIds)->update(['enabled' => 1]);
+                CoinArbitrage::query()->whereIn('id', $seedIds)->update([
+                    'enabled' => 1,
+                    'test_mode' => 0,
+                ]);
             }
 
             $culled = $this->cullHistoricalLosers((int) $this->option('cull-days'), $seedIds);
@@ -157,7 +161,7 @@ class ScanUsdtTriangles extends Command
             }
 
             Cache::put('binance.feed.reload', true);
-            $this->info('Disabled others; enabled '.count($seedIds).' of top '.(int) $this->option('top').' (test_mode=0 / live); feed reload requested.');
+            $this->info('Disabled others (test_mode=1); enabled '.count($seedIds).' of top '.(int) $this->option('top').' as live (test_mode=0); feed reload requested.');
         }
 
         return self::SUCCESS;
@@ -191,7 +195,7 @@ class ScanUsdtTriangles extends Command
 
             // Need enough history; zero wins + deeply negative mean → disable.
             if ($total >= 100 && $wins === 0 && $mean !== null && $mean < -0.10) {
-                CoinArbitrage::query()->whereKey($id)->update(['enabled' => 0]);
+                CoinArbitrage::query()->whereKey($id)->update(['enabled' => 0, 'test_mode' => 1]);
                 $culled++;
                 $this->line("  cull #{$id}: rows={$total} wins=0 mean=".number_format($mean, 4).'%');
             }
