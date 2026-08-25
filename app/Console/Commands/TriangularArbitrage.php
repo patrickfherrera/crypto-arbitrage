@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\ArbitrageLog;
 use App\Models\Coin;
 use App\Models\CoinArbitrage;
+use App\Models\LiveTradeLog;
 use App\Services\BinanceSpotAPI\Market;
 use App\Services\BinanceSpotAPI\Trade;
 use Illuminate\Console\Command;
@@ -217,12 +218,24 @@ class TriangularArbitrage extends Command
             && (int) $coinArbitrage->test_mode === 0
         ) {
             $this->info("✅ EXECUTE {$best['direction']} {$pct}% cap={$startUSDT} age={$quoteAgeMs}ms");
-            try {
-                $this->setParams($coinArbitrage, $startUSDT, $best['direction']);
-            } catch (\Throwable $e) {
-                $this->error('Live execute failed (may be partial): '.$e->getMessage());
-                report($e);
-            }
+            $liveLog = $this->executeLiveWithUsdtLog(
+                $coinArbitrage,
+                $startUSDT,
+                $best['direction'],
+                'daemon',
+                [
+                    'sim_profit_pct' => $best['profit_pct'],
+                    'quote_age_ms' => $quoteAgeMs,
+                ]
+            );
+            $this->info(sprintf(
+                'USDT %s → %s (delta %+0.8f / %+0.4f%% vs capital) [%s]',
+                number_format((float) $liveLog->usdt_before, 8),
+                number_format((float) ($liveLog->usdt_after ?? 0), 8),
+                (float) ($liveLog->usdt_delta ?? 0),
+                (float) ($liveLog->usdt_delta_pct ?? 0),
+                $liveLog->status
+            ));
         } else {
             $this->warn("❌ {$best['direction']} {$pct}% profit={$best['profit']} cap={$startUSDT} age={$quoteAgeMs}ms");
         }
@@ -431,6 +444,72 @@ class TriangularArbitrage extends Command
     
             return null;
         }
+    }
+
+    /**
+     * Run live legs and persist USDT before/after so realized PnL is measurable.
+     *
+     * @param  array{sim_profit_pct?: float|null, quote_age_ms?: int|null}  $meta
+     */
+    protected function executeLiveWithUsdtLog(
+        CoinArbitrage $coinArbitrage,
+        float $capitalUSDT,
+        string $direction,
+        string $source,
+        array $meta = []
+    ): LiveTradeLog {
+        $trade = new Trade;
+        $beforeMap = $trade->freeBalancesMap();
+        $usdtBefore = (float) ($beforeMap['USDT'] ?? 0);
+
+        $log = LiveTradeLog::create([
+            'coin_arbitrage_id' => $coinArbitrage->id,
+            'source' => $source,
+            'direction' => $direction,
+            'capital' => $capitalUSDT,
+            'usdt_before' => $usdtBefore,
+            'sim_profit_pct' => $meta['sim_profit_pct'] ?? null,
+            'quote_age_ms' => $meta['quote_age_ms'] ?? null,
+            'status' => 'failed',
+        ]);
+
+        $error = null;
+        try {
+            $this->setParams($coinArbitrage, $capitalUSDT, $direction);
+            $status = 'completed';
+        } catch (\Throwable $e) {
+            $error = $e->getMessage();
+            $status = 'partial';
+            $this->error('Live execute failed (may be partial): '.$error);
+            report($e);
+        }
+
+        usleep(500_000);
+        $afterMap = $trade->freeBalancesMap();
+        $usdtAfter = (float) ($afterMap['USDT'] ?? 0);
+        $delta = $usdtAfter - $usdtBefore;
+        $deltaPct = $capitalUSDT > 0 ? ($delta / $capitalUSDT) * 100 : null;
+
+        $interesting = [];
+        foreach ($afterMap as $asset => $qty) {
+            if ($qty >= 0.00000001 && (
+                in_array($asset, ['USDT', 'USDC', 'BTC', 'ETH', 'SOL', 'BNB'], true)
+                || $qty >= 0.0001
+            )) {
+                $interesting[$asset] = $qty;
+            }
+        }
+
+        $log->update([
+            'usdt_after' => $usdtAfter,
+            'usdt_delta' => $delta,
+            'usdt_delta_pct' => $deltaPct,
+            'status' => $error ? $status : 'completed',
+            'error' => $error,
+            'balances_after' => $interesting,
+        ]);
+
+        return $log->fresh();
     }
 
     protected function setParams(CoinArbitrage $coin_arbitrage, float $capitalUSDT, string $direction = 'forward'): void

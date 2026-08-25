@@ -6,6 +6,7 @@ use App\Http\Controllers\ImagesController;
 use App\Http\Controllers\CoinsController;
 use App\Http\Controllers\ArbitrageController;
 use App\Http\Controllers\ArbitrageLogsController;
+use App\Http\Controllers\LiveTradeLogsController;
 use App\Http\Controllers\UsersController;
 use Illuminate\Support\Facades\Route;
 
@@ -129,6 +130,10 @@ Route::get('arbitrage-logs', [ArbitrageLogsController::class, 'index'])
 
 Route::post('arbitrage-logs/export', [ArbitrageLogsController::class, 'export'])
     ->name('arbitrage-logs.export')
+    ->middleware('auth');
+
+Route::get('live-trades', [LiveTradeLogsController::class, 'index'])
+    ->name('live-trades.index')
     ->middleware('auth');
 
 // Images

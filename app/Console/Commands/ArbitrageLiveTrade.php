@@ -2,10 +2,8 @@
 
 namespace App\Console\Commands;
 
-use App\Models\ArbitrageLog;
 use App\Models\CoinArbitrage;
 use App\Services\Binance\FeeResolver;
-use App\Services\BinanceSpotAPI\Trade;
 
 class ArbitrageLiveTrade extends TriangularArbitrage
 {
@@ -141,50 +139,38 @@ class ArbitrageLiveTrade extends TriangularArbitrage
             return self::SUCCESS;
         }
 
-        $trade = new Trade;
-        $before = $trade->freeBalancesMap();
-        $usdtBefore = (float) ($before['USDT'] ?? 0);
-        $this->info('USDT before: '.number_format($usdtBefore, 8));
+        $liveLog = $this->executeLiveWithUsdtLog(
+            $arb,
+            $startUSDT,
+            $best['direction'],
+            'live_trade',
+            [
+                'sim_profit_pct' => $best['profit_pct'],
+                'quote_age_ms' => $quoteAgeMs,
+            ]
+        );
 
-        $tradeError = null;
-        try {
-            $this->setParams($arb, $startUSDT, $best['direction']);
-        } catch (\Throwable $e) {
-            $tradeError = $e;
-            $this->error('Trade failed (may be partial): '.$e->getMessage());
-            report($e);
+        $this->table(
+            ['field', 'value'],
+            [
+                ['live_trade_log_id', $liveLog->id],
+                ['status', $liveLog->status],
+                ['usdt_before', number_format((float) $liveLog->usdt_before, 8)],
+                ['usdt_after', number_format((float) ($liveLog->usdt_after ?? 0), 8)],
+                ['usdt_delta', number_format((float) ($liveLog->usdt_delta ?? 0), 8)],
+                ['usdt_delta_pct (vs capital)', number_format((float) ($liveLog->usdt_delta_pct ?? 0), 6).'%'],
+                ['sim_profit_pct', number_format((float) ($liveLog->sim_profit_pct ?? 0), 6).'%'],
+                ['error', $liveLog->error ?? '—'],
+            ]
+        );
+
+        if ($liveLog->balances_after) {
+            $this->line('Balances after: '.json_encode($liveLog->balances_after));
         }
 
-        // Brief settle so balances refresh (also after partial fills)
-        usleep(500_000);
-        $after = $trade->freeBalancesMap();
-        $usdtAfter = (float) ($after['USDT'] ?? 0);
-        $delta = $usdtAfter - $usdtBefore;
+        $this->info('Saved to live_trade_logs (realized USDT PnL).');
 
-        $this->info('USDT after:  '.number_format($usdtAfter, 8));
-        $this->info('USDT delta:  '.number_format($delta, 8).($delta >= 0 ? ' (up)' : ' (down)'));
-        $this->line('Key balances after: '.json_encode(array_filter(
-            $after,
-            fn ($v, $k) => in_array($k, ['USDT', 'USDC', 'ETH', 'SOL', 'BTC'], true) || $v > 0,
-            ARRAY_FILTER_USE_BOTH
-        )));
-
-        ArbitrageLog::create([
-            'capital' => $startUSDT,
-            'final_amount' => $usdtAfter,
-            'profit' => $delta,
-            'profit_pct' => $usdtBefore > 0 ? ($delta / $usdtBefore) * 100 : $best['profit_pct'],
-            'status' => $tradeError ? 'NOT_PROFITABLE' : ($delta >= 0 ? 'PROFITABLE' : 'NOT_PROFITABLE'),
-            'direction' => $best['direction'],
-            'quote_age_ms' => $quoteAgeMs,
-            'coin_arbitrage_id' => $arb->id,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        $this->info('Logged live result to arbitrage_logs.');
-
-        return $tradeError ? self::FAILURE : self::SUCCESS;
+        return $liveLog->status === 'completed' ? self::SUCCESS : self::FAILURE;
     }
 
     /**
