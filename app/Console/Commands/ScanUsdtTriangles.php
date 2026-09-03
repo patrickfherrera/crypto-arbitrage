@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Models\ArbitrageLog;
 use App\Models\Coin;
 use App\Models\CoinArbitrage;
 use App\Services\Binance\FeeResolver;
@@ -16,10 +15,9 @@ class ScanUsdtTriangles extends Command
                             {--quote=USDT}
                             {--capital=100}
                             {--top=30}
-                            {--cull-days=7 : Lookback days when culling historical losers}
-                            {--seed : Create/enable top CoinArbitrage rows (test_mode=0 / live)}';
+                            {--seed : Create/enable top CoinArbitrage rows (test_mode=0 / live); never disables existing}';
 
-    protected $description = 'Enumerate quote triangles, score via REST bookTicker, and optionally enable top hits as live';
+    protected $description = 'Enumerate quote triangles, score via REST bookTicker, and optionally add/enable top hits as live';
 
 
     /** @var array<string, array{base: string, quote: string}> */
@@ -137,9 +135,7 @@ class ScanUsdtTriangles extends Command
         );
 
         if ($this->option('seed')) {
-            // Park everyone as disabled + test; top hits are re-enabled live below.
-            CoinArbitrage::query()->update(['enabled' => 0, 'test_mode' => 1]);
-
+            // Additive: never disable existing rows; create/enable today's top as live.
             $seedIds = [];
             foreach ($top as $row) {
                 $arb = $this->seedRow($row, $capital);
@@ -155,53 +151,17 @@ class ScanUsdtTriangles extends Command
                 ]);
             }
 
-            $culled = $this->cullHistoricalLosers((int) $this->option('cull-days'), $seedIds);
-            if ($culled > 0) {
-                $this->warn("Culled {$culled} historical loser(s) from enabled set.");
-            }
+            $enabledTotal = CoinArbitrage::query()->where('enabled', true)->count();
 
             Cache::put('binance.feed.reload', true);
-            $this->info('Disabled others (test_mode=1); enabled '.count($seedIds).' of top '.(int) $this->option('top').' as live (test_mode=0); feed reload requested.');
+            $this->info(
+                'Seeded '.count($seedIds).' of top '.(int) $this->option('top')
+                .' as live (test_mode=0); existing enabled left alone;'
+                ." {$enabledTotal} enabled total; feed reload requested."
+            );
         }
 
         return self::SUCCESS;
-    }
-
-    /**
-     * Disable seeded rows that historically never win and bleed in the lookback window.
-     *
-     * @param  array<int, int>  $seedIds
-     */
-    protected function cullHistoricalLosers(int $days, array $seedIds): int
-    {
-        if ($days <= 0 || $seedIds === []) {
-            return 0;
-        }
-
-        $since = now()->subDays($days);
-        $culled = 0;
-
-        foreach ($seedIds as $id) {
-            $stats = ArbitrageLog::query()
-                ->where('coin_arbitrage_id', $id)
-                ->where('created_at', '>=', $since)
-                ->whereNotNull('profit_pct')
-                ->selectRaw('COUNT(*) as total, SUM(CASE WHEN profit_pct > 0 AND status = ? THEN 1 ELSE 0 END) as wins, AVG(profit_pct) as mean_pct', ['PROFITABLE'])
-                ->first();
-
-            $total = (int) ($stats->total ?? 0);
-            $wins = (int) ($stats->wins ?? 0);
-            $mean = $stats->mean_pct !== null ? (float) $stats->mean_pct : null;
-
-            // Need enough history; zero wins + deeply negative mean → disable.
-            if ($total >= 100 && $wins === 0 && $mean !== null && $mean < -0.10) {
-                CoinArbitrage::query()->whereKey($id)->update(['enabled' => 0, 'test_mode' => 1]);
-                $culled++;
-                $this->line("  cull #{$id}: rows={$total} wins=0 mean=".number_format($mean, 4).'%');
-            }
-        }
-
-        return $culled;
     }
 
     protected function scoreUsdtTriangle(
