@@ -3,15 +3,21 @@
     <Head title="Live Trades" />
     <h1 class="mb-8 text-3xl font-bold">Live Trades (USDT)</h1>
 
-    <p class="mb-6 text-sm text-gray-600">
+    <p class="mb-2 text-sm text-gray-600">
       {{ summary.total }} trades ·
       {{ summary.completed }} completed ·
-      {{ summary.partial }} partial ·
-      net
-      <span :class="deltaClass(summary.net_usdt)">{{ formatDelta(summary.net_usdt) }} USDT</span>
+      {{ summary.partial }} partial
+    </p>
+    <p class="mb-6 text-sm text-gray-600">
+      Equity net
+      <span :class="deltaClass(summary.net_equity)">{{ formatDelta(summary.net_equity) }}</span>
       · mean
-      <span :class="deltaClass(summary.mean_delta_pct)">{{ formatPct(summary.mean_delta_pct) }}</span>
+      <span :class="deltaClass(summary.mean_equity_delta_pct)">{{ formatPct(summary.mean_equity_delta_pct) }}</span>
       vs capital
+      <span class="text-gray-400">
+        (USDT-only net
+        <span :class="deltaClass(summary.net_usdt)">{{ formatDelta(summary.net_usdt) }}</span>)
+      </span>
     </p>
 
     <div class="flex items-center justify-between mb-6">
@@ -34,10 +40,11 @@
             <th class="pb-3 pt-4 px-6">Path</th>
             <th class="pb-3 pt-4 px-6">Dir</th>
             <th class="pb-3 pt-4 px-6">Capital</th>
-            <th class="pb-3 pt-4 px-6">USDT before</th>
-            <th class="pb-3 pt-4 px-6">USDT after</th>
+            <th class="pb-3 pt-4 px-6">Equity before</th>
+            <th class="pb-3 pt-4 px-6">Equity after</th>
+            <th class="pb-3 pt-4 px-6">Δ Equity</th>
+            <th class="pb-3 pt-4 px-6">Δ Eq %</th>
             <th class="pb-3 pt-4 px-6">Δ USDT</th>
-            <th class="pb-3 pt-4 px-6">Δ %</th>
             <th class="pb-3 pt-4 px-6">Sim %</th>
             <th class="pb-3 pt-4 px-6">Status</th>
             <th class="pb-3 pt-4 px-6">Source</th>
@@ -49,10 +56,11 @@
             <td class="border-t px-6 py-3">{{ row.path }}</td>
             <td class="border-t px-6 py-3">{{ row.direction || '—' }}</td>
             <td class="border-t px-6 py-3">{{ formatMoney(row.capital) }}</td>
-            <td class="border-t px-6 py-3">{{ formatMoney(row.usdt_before) }}</td>
-            <td class="border-t px-6 py-3">{{ formatMoney(row.usdt_after) }}</td>
+            <td class="border-t px-6 py-3">{{ formatMoney(row.equity_before) }}</td>
+            <td class="border-t px-6 py-3">{{ formatMoney(row.equity_after) }}</td>
+            <td class="border-t px-6 py-3" :class="deltaClass(row.equity_delta)">{{ formatDelta(row.equity_delta) }}</td>
+            <td class="border-t px-6 py-3" :class="deltaClass(row.equity_delta_pct)">{{ formatPct(row.equity_delta_pct) }}</td>
             <td class="border-t px-6 py-3" :class="deltaClass(row.usdt_delta)">{{ formatDelta(row.usdt_delta) }}</td>
-            <td class="border-t px-6 py-3" :class="deltaClass(row.usdt_delta_pct)">{{ formatPct(row.usdt_delta_pct) }}</td>
             <td class="border-t px-6 py-3">{{ formatPct(row.sim_profit_pct) }}</td>
             <td class="border-t px-6 py-3">
               <span
@@ -66,7 +74,7 @@
             <td class="border-t px-6 py-3">{{ row.source }}</td>
           </tr>
           <tr v-if="logs.data.length === 0">
-            <td class="px-6 py-4 border-t" colspan="11">No live trades yet.</td>
+            <td class="px-6 py-4 border-t" colspan="12">No live trades yet.</td>
           </tr>
         </tbody>
       </table>

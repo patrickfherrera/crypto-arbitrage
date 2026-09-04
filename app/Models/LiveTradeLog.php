@@ -17,6 +17,10 @@ class LiveTradeLog extends Model
             'usdt_after' => 'float',
             'usdt_delta' => 'float',
             'usdt_delta_pct' => 'float',
+            'equity_before' => 'float',
+            'equity_after' => 'float',
+            'equity_delta' => 'float',
+            'equity_delta_pct' => 'float',
             'sim_profit_pct' => 'float',
             'balances_after' => 'array',
         ];

@@ -159,6 +159,10 @@ class ArbitrageLiveTrade extends TriangularArbitrage
                 ['usdt_after', number_format((float) ($liveLog->usdt_after ?? 0), 8)],
                 ['usdt_delta', number_format((float) ($liveLog->usdt_delta ?? 0), 8)],
                 ['usdt_delta_pct (vs capital)', number_format((float) ($liveLog->usdt_delta_pct ?? 0), 6).'%'],
+                ['equity_before', number_format((float) ($liveLog->equity_before ?? 0), 8)],
+                ['equity_after', number_format((float) ($liveLog->equity_after ?? 0), 8)],
+                ['equity_delta', number_format((float) ($liveLog->equity_delta ?? 0), 8)],
+                ['equity_delta_pct (vs capital)', number_format((float) ($liveLog->equity_delta_pct ?? 0), 6).'%'],
                 ['sim_profit_pct', number_format((float) ($liveLog->sim_profit_pct ?? 0), 6).'%'],
                 ['error', $liveLog->error ?? '—'],
             ]
@@ -168,7 +172,7 @@ class ArbitrageLiveTrade extends TriangularArbitrage
             $this->line('Balances after: '.json_encode($liveLog->balances_after));
         }
 
-        $this->info('Saved to live_trade_logs (realized USDT PnL).');
+        $this->info('Saved to live_trade_logs (USDT + marked equity PnL).');
 
         return $liveLog->status === 'completed' ? self::SUCCESS : self::FAILURE;
     }

@@ -17,6 +17,8 @@ class LiveTradeLogsController extends Controller
             ->selectRaw("SUM(CASE WHEN status = 'partial' THEN 1 ELSE 0 END) as partial")
             ->selectRaw('COALESCE(SUM(usdt_delta), 0) as net_usdt')
             ->selectRaw('COALESCE(AVG(usdt_delta_pct), 0) as mean_delta_pct')
+            ->selectRaw('COALESCE(SUM(equity_delta), 0) as net_equity')
+            ->selectRaw('COALESCE(AVG(equity_delta_pct), 0) as mean_equity_delta_pct')
             ->first();
 
         return Inertia::render('LiveTradeLogs/Index', [
@@ -26,6 +28,8 @@ class LiveTradeLogsController extends Controller
                 'partial' => (int) ($summary->partial ?? 0),
                 'net_usdt' => (float) ($summary->net_usdt ?? 0),
                 'mean_delta_pct' => (float) ($summary->mean_delta_pct ?? 0),
+                'net_equity' => (float) ($summary->net_equity ?? 0),
+                'mean_equity_delta_pct' => (float) ($summary->mean_equity_delta_pct ?? 0),
             ],
             'logs' => LiveTradeLog::query()
                 ->with([
@@ -55,6 +59,10 @@ class LiveTradeLogsController extends Controller
                         'usdt_after' => $log->usdt_after,
                         'usdt_delta' => $log->usdt_delta,
                         'usdt_delta_pct' => $log->usdt_delta_pct,
+                        'equity_before' => $log->equity_before,
+                        'equity_after' => $log->equity_after,
+                        'equity_delta' => $log->equity_delta,
+                        'equity_delta_pct' => $log->equity_delta_pct,
                         'sim_profit_pct' => $log->sim_profit_pct,
                         'quote_age_ms' => $log->quote_age_ms,
                         'status' => $log->status,

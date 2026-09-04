@@ -229,11 +229,13 @@ class TriangularArbitrage extends Command
                 ]
             );
             $this->info(sprintf(
-                'USDT %s → %s (delta %+0.8f / %+0.4f%% vs capital) [%s]',
+                'USDT %s → %s (delta %+0.8f / %+0.4f%%) | equity %+0.8f / %+0.4f%% [%s]',
                 number_format((float) $liveLog->usdt_before, 8),
                 number_format((float) ($liveLog->usdt_after ?? 0), 8),
                 (float) ($liveLog->usdt_delta ?? 0),
                 (float) ($liveLog->usdt_delta_pct ?? 0),
+                (float) ($liveLog->equity_delta ?? 0),
+                (float) ($liveLog->equity_delta_pct ?? 0),
                 $liveLog->status
             ));
         } else {
@@ -461,6 +463,7 @@ class TriangularArbitrage extends Command
         $trade = new Trade;
         $beforeMap = $trade->freeBalancesMap();
         $usdtBefore = (float) ($beforeMap['USDT'] ?? 0);
+        $equityBefore = $this->equityUsdt($beforeMap);
 
         $log = LiveTradeLog::create([
             'coin_arbitrage_id' => $coinArbitrage->id,
@@ -468,6 +471,7 @@ class TriangularArbitrage extends Command
             'direction' => $direction,
             'capital' => $capitalUSDT,
             'usdt_before' => $usdtBefore,
+            'equity_before' => $equityBefore,
             'sim_profit_pct' => $meta['sim_profit_pct'] ?? null,
             'quote_age_ms' => $meta['quote_age_ms'] ?? null,
             'status' => 'failed',
@@ -490,10 +494,14 @@ class TriangularArbitrage extends Command
         $delta = $usdtAfter - $usdtBefore;
         $deltaPct = $capitalUSDT > 0 ? ($delta / $capitalUSDT) * 100 : null;
 
+        $equityAfter = $this->equityUsdt($afterMap);
+        $equityDelta = $equityAfter - $equityBefore;
+        $equityDeltaPct = $capitalUSDT > 0 ? ($equityDelta / $capitalUSDT) * 100 : null;
+
         $interesting = [];
         foreach ($afterMap as $asset => $qty) {
             if ($qty >= 0.00000001 && (
-                in_array($asset, ['USDT', 'USDC', 'BTC', 'ETH', 'SOL', 'BNB'], true)
+                in_array($asset, ['USDT', 'USDC', 'FDUSD', 'BTC', 'ETH', 'SOL', 'BNB'], true)
                 || $qty >= 0.0001
             )) {
                 $interesting[$asset] = $qty;
@@ -504,12 +512,66 @@ class TriangularArbitrage extends Command
             'usdt_after' => $usdtAfter,
             'usdt_delta' => $delta,
             'usdt_delta_pct' => $deltaPct,
+            'equity_after' => $equityAfter,
+            'equity_delta' => $equityDelta,
+            'equity_delta_pct' => $equityDeltaPct,
             'status' => $error ? $status : 'completed',
             'error' => $error,
             'balances_after' => $interesting,
         ]);
 
         return $log->fresh();
+    }
+
+    /**
+     * Mark free balances to USDT. Stables at 1.0; others via *USDT mid (Redis then REST).
+     * Unrelated bags (e.g. SLP) cancel out in before/after delta when unchanged.
+     *
+     * @param  array<string, float>  $balances
+     */
+    protected function equityUsdt(array $balances): float
+    {
+        $stables = ['USDT', 'USDC', 'FDUSD', 'BUSD', 'USD', 'TUSD'];
+        $total = 0.0;
+        $needBooks = [];
+
+        foreach ($balances as $asset => $qty) {
+            $asset = strtoupper((string) $asset);
+            $qty = (float) $qty;
+            if ($qty < 1e-8) {
+                continue;
+            }
+
+            if (in_array($asset, $stables, true)) {
+                $total += $qty;
+                continue;
+            }
+
+            $needBooks[] = $asset.'USDT';
+        }
+
+        $books = $needBooks === [] ? [] : $this->bestEffortBooks($needBooks);
+
+        foreach ($balances as $asset => $qty) {
+            $asset = strtoupper((string) $asset);
+            $qty = (float) $qty;
+            if ($qty < 1e-8 || in_array($asset, $stables, true)) {
+                continue;
+            }
+
+            $pair = $asset.'USDT';
+            $px = $this->midPrice($books, $pair);
+            if ($px <= 0) {
+                $px = $this->restBookMid($pair);
+            }
+            if ($px <= 0) {
+                continue;
+            }
+
+            $total += $qty * $px;
+        }
+
+        return round($total, 8);
     }
 
     protected function setParams(CoinArbitrage $coin_arbitrage, float $capitalUSDT, string $direction = 'forward'): void
