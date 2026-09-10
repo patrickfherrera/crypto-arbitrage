@@ -6,13 +6,14 @@ use App\Models\ArbitrageLog;
 use App\Models\Coin;
 use App\Models\CoinArbitrage;
 use App\Models\LiveTradeLog;
+use App\Services\Binance\BookTickerStore;
+use App\Services\Binance\FeeResolver;
+use App\Services\Binance\SpotEquityValuator;
 use App\Services\BinanceSpotAPI\Market;
 use App\Services\BinanceSpotAPI\Trade;
 use Illuminate\Console\Command;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
-use App\Services\Binance\BookTickerStore;
-use App\Services\Binance\FeeResolver;
 
 class TriangularArbitrage extends Command
 {
@@ -461,9 +462,10 @@ class TriangularArbitrage extends Command
         array $meta = []
     ): LiveTradeLog {
         $trade = new Trade;
-        $beforeMap = $trade->freeBalancesMap();
+        $valuator = app(SpotEquityValuator::class);
+        $beforeMap = $trade->portfolioBalancesMap();
         $usdtBefore = (float) ($beforeMap['USDT'] ?? 0);
-        $equityBefore = $this->equityUsdt($beforeMap);
+        $equityBefore = $this->equityUsdt($beforeMap, $valuator);
 
         $log = LiveTradeLog::create([
             'coin_arbitrage_id' => $coinArbitrage->id,
@@ -489,19 +491,19 @@ class TriangularArbitrage extends Command
         }
 
         usleep(500_000);
-        $afterMap = $trade->freeBalancesMap();
+        $afterMap = $trade->portfolioBalancesMap();
         $usdtAfter = (float) ($afterMap['USDT'] ?? 0);
         $delta = $usdtAfter - $usdtBefore;
         $deltaPct = $capitalUSDT > 0 ? ($delta / $capitalUSDT) * 100 : null;
 
-        $equityAfter = $this->equityUsdt($afterMap);
+        $equityAfter = $this->equityUsdt($afterMap, $valuator);
         $equityDelta = $equityAfter - $equityBefore;
         $equityDeltaPct = $capitalUSDT > 0 ? ($equityDelta / $capitalUSDT) * 100 : null;
 
         $interesting = [];
         foreach ($afterMap as $asset => $qty) {
             if ($qty >= 0.00000001 && (
-                in_array($asset, ['USDT', 'USDC', 'FDUSD', 'BTC', 'ETH', 'SOL', 'BNB'], true)
+                in_array($asset, ['USDT', 'USDC', 'FDUSD', 'BTC', 'ETH', 'SOL', 'BNB', 'ZEC', 'SLP'], true)
                 || $qty >= 0.0001
             )) {
                 $interesting[$asset] = $qty;
@@ -524,54 +526,19 @@ class TriangularArbitrage extends Command
     }
 
     /**
-     * Mark free balances to USDT. Stables at 1.0; others via *USDT mid (Redis then REST).
-     * Unrelated bags (e.g. SLP) cancel out in before/after delta when unchanged.
+     * Mark free+locked balances to USDT (Binance-style Est. Total).
      *
      * @param  array<string, float>  $balances
      */
-    protected function equityUsdt(array $balances): float
+    protected function equityUsdt(array $balances, ?SpotEquityValuator $valuator = null): float
     {
-        $stables = ['USDT', 'USDC', 'FDUSD', 'BUSD', 'USD', 'TUSD'];
-        $total = 0.0;
-        $needBooks = [];
-
-        foreach ($balances as $asset => $qty) {
-            $asset = strtoupper((string) $asset);
-            $qty = (float) $qty;
-            if ($qty < 1e-8) {
-                continue;
-            }
-
-            if (in_array($asset, $stables, true)) {
-                $total += $qty;
-                continue;
-            }
-
-            $needBooks[] = $asset.'USDT';
+        $valuator ??= app(SpotEquityValuator::class);
+        $result = $valuator->value($balances);
+        if ($result['skipped'] !== []) {
+            $this->warn('equity: unpriced assets skipped: '.implode(', ', $result['skipped']));
         }
 
-        $books = $needBooks === [] ? [] : $this->bestEffortBooks($needBooks);
-
-        foreach ($balances as $asset => $qty) {
-            $asset = strtoupper((string) $asset);
-            $qty = (float) $qty;
-            if ($qty < 1e-8 || in_array($asset, $stables, true)) {
-                continue;
-            }
-
-            $pair = $asset.'USDT';
-            $px = $this->midPrice($books, $pair);
-            if ($px <= 0) {
-                $px = $this->restBookMid($pair);
-            }
-            if ($px <= 0) {
-                continue;
-            }
-
-            $total += $qty * $px;
-        }
-
-        return round($total, 8);
+        return $result['total'];
     }
 
     protected function setParams(CoinArbitrage $coin_arbitrage, float $capitalUSDT, string $direction = 'forward'): void

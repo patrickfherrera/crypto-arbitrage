@@ -3,13 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Models\LiveTradeLog;
+use App\Services\Binance\SpotEquityValuator;
+use App\Services\BinanceSpotAPI\Trade;
 use Illuminate\Support\Facades\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class LiveTradeLogsController extends Controller
 {
-    public function index(): Response
+    public function index(SpotEquityValuator $equity): Response
     {
         $summary = LiveTradeLog::query()
             ->selectRaw('COUNT(*) as total')
@@ -21,7 +23,10 @@ class LiveTradeLogsController extends Controller
             ->selectRaw('COALESCE(AVG(equity_delta_pct), 0) as mean_equity_delta_pct')
             ->first();
 
+        $wallet = $this->currentWalletEquity($equity);
+
         return Inertia::render('LiveTradeLogs/Index', [
+            'wallet' => $wallet,
             'summary' => [
                 'total' => (int) ($summary->total ?? 0),
                 'completed' => (int) ($summary->completed ?? 0),
@@ -73,5 +78,41 @@ class LiveTradeLogsController extends Controller
                 'status' => Request::input('status'),
             ],
         ]);
+    }
+
+    /**
+     * @return array{est_total_usdt: float|null, usdt: float|null, spot_marked_usdt: float|null, skipped: list<string>, error: string|null}
+     */
+    protected function currentWalletEquity(SpotEquityValuator $equity): array
+    {
+        try {
+            $trade = new Trade;
+            $estTotal = $trade->walletEstTotalUsdt();
+            $balances = $trade->portfolioBalancesMap();
+            $valued = $equity->value($balances);
+
+            // Prefer Binance's own wallet total when available (matches dashboard Est. Total).
+            $displayTotal = $estTotal !== null && $estTotal > 0
+                ? $estTotal
+                : $valued['total'];
+
+            return [
+                'est_total_usdt' => $displayTotal,
+                'usdt' => (float) ($balances['USDT'] ?? 0),
+                'spot_marked_usdt' => $valued['total'],
+                'skipped' => $valued['skipped'],
+                'error' => null,
+            ];
+        } catch (\Throwable $e) {
+            report($e);
+
+            return [
+                'est_total_usdt' => null,
+                'usdt' => null,
+                'spot_marked_usdt' => null,
+                'skipped' => [],
+                'error' => $e->getMessage(),
+            ];
+        }
     }
 }

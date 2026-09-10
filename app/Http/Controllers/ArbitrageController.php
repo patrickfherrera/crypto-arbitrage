@@ -22,6 +22,10 @@ class ArbitrageController extends Controller
                 'search' => Request::input('search'),
                 'enabled' => $enabled,
             ],
+            'counts' => [
+                'enabled' => CoinArbitrage::query()->where('enabled', true)->count(),
+                'total' => CoinArbitrage::query()->count(),
+            ],
             'arbitrages' => CoinArbitrage::with([
                     'coin_one',
                     'coin_two',

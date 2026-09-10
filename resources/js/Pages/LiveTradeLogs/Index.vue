@@ -3,6 +3,30 @@
     <Head title="Live Trades" />
     <h1 class="mb-8 text-3xl font-bold">Live Trades (USDT)</h1>
 
+    <div class="mb-6 rounded-md border border-gray-200 bg-white px-5 py-4 shadow-sm">
+      <div class="text-xs font-medium uppercase tracking-wide text-gray-500">Est. Total Value</div>
+      <div class="mt-1 text-3xl font-semibold text-gray-900">
+        <template v-if="wallet.est_total_usdt !== null && wallet.est_total_usdt !== undefined">
+          {{ formatMoney(wallet.est_total_usdt) }}
+          <span class="text-lg font-medium text-gray-500">USDT</span>
+        </template>
+        <template v-else>—</template>
+      </div>
+      <p class="mt-1 text-sm text-gray-500">
+        Binance wallet Est. Total (all wallets, USDT).
+        <span v-if="wallet.usdt !== null && wallet.usdt !== undefined">
+          Spot USDT cash {{ formatMoney(wallet.usdt) }}.
+        </span>
+        <span v-if="wallet.spot_marked_usdt !== null && wallet.spot_marked_usdt !== undefined" class="text-gray-400">
+          Marked portfolio {{ formatMoney(wallet.spot_marked_usdt) }}.
+        </span>
+        <span v-if="wallet.skipped && wallet.skipped.length" class="text-amber-700">
+          Unpriced in mark: {{ wallet.skipped.join(', ') }}.
+        </span>
+        <span v-if="wallet.error" class="text-red-600">{{ wallet.error }}</span>
+      </p>
+    </div>
+
     <p class="mb-2 text-sm text-gray-600">
       {{ summary.total }} trades ·
       {{ summary.completed }} completed ·
@@ -95,6 +119,7 @@ export default {
   components: { Head, Pagination },
   layout: Layout,
   props: {
+    wallet: Object,
     summary: Object,
     logs: Object,
     filters: Object,

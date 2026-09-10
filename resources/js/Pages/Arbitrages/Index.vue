@@ -1,7 +1,11 @@
 <template>
   <div>
     <Head title="Arbitrage" />
-    <h1 class="mb-8 text-3xl font-bold">Arbitrage</h1>
+    <h1 class="mb-2 text-3xl font-bold">Arbitrage</h1>
+    <p class="mb-8 text-sm text-gray-600">
+      <span class="font-medium text-emerald-700">{{ counts.enabled }}</span> enabled
+      · {{ counts.total }} total
+    </p>
     <div class="flex items-center justify-between mb-6">
       <search-filter v-model="form.search" class="mr-4 w-full max-w-md" @reset="reset">
         <label class="block text-gray-700">Enabled:</label>
@@ -140,6 +144,10 @@ export default {
   layout: Layout,
   props: {
     filters: Object,
+    counts: {
+      type: Object,
+      default: () => ({ enabled: 0, total: 0 }),
+    },
     arbitrages: Object,
   },
   data() {
