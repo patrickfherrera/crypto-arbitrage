@@ -20,6 +20,11 @@
         <div :class="isUrl('live-trades') ? 'text-white' : 'text-slate-400 group-hover:text-white'">Live Trades</div>
       </Link>
     </div>
+    <div class="mb-4">
+      <Link class="group flex items-center py-3" href="/portfolio">
+        <div :class="isUrl('portfolio') ? 'text-white' : 'text-slate-400 group-hover:text-white'">Portfolio</div>
+      </Link>
+    </div>
   </div>
 </template>
 
